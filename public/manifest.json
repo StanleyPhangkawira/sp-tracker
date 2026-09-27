@@ -1,0 +1,16 @@
+{
+  "name": "Lucky Spinner",
+  "short_name": "Spinner",
+  "description": "Customizable Spinning Wheel App",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#f3f4f6",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}
