@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import AuthScreen from "../components/AuthScreen";
 import { User } from "@supabase/supabase-js";
 
-// [Keep all your existing Interfaces here (ChildTask, Goal, SliceType, RewardItem, WheelSlice, etc)]
+// [Keep all your existing Interfaces here (ChildTask, Goal, SliceType, RewardItem, WheelSlice, etcetera)]
 export interface ChildTask { id: string; title: string; reward: number; isCompleted: boolean; isClaimed?: boolean; }
 export interface Goal { id: string; title: string; type: "weekly" | "daily"; frequency?: "once" | "day-night"; reward: number; isCompleted: boolean; isClaimed?: boolean; children: ChildTask[]; }
 export type SliceType = "permanent" | "booster" | "token";
