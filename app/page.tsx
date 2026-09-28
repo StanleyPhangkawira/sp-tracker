@@ -17,7 +17,7 @@ type SubTask = Goal["children"][number];
 /* ------------------------------------------------------------------ */
 type DraggableCardProps = {
   id: string;
-  disabled: boolean;
+  disabled?: boolean;
   isDragging: boolean;
   className: string;
   onDragBegin: (id: string) => void;
@@ -149,7 +149,7 @@ const DraggableCard = React.forwardRef<HTMLDivElement, DraggableCardProps>(funct
 /*  SortableRow: one sub-task row. Drag it by its small grip icon so  */
 /*  that swiping on a phone still scrolls the page normally.          */
 /* ------------------------------------------------------------------ */
-function SortableRow({ value, disabled, className, children }: { value: SubTask; disabled: boolean; className: string; children: React.ReactNode }) {
+function SortableRow({ value, disabled, className, children }: { value: SubTask; disabled?: boolean; className: string; children: React.ReactNode }) {
   const controls = useDragControls();
   return (
     <Reorder.Item
