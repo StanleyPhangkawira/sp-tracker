@@ -3,47 +3,51 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Target, Gift, Coins, Dices, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
-const { spCoins, spinTokens, resetApp, logout } = useAppContext();
+import { Target, Gift, Coins, Dices, RotateCcw, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
+import { useAppContext } from "../context/AppContext";
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { spCoins, spinTokens, resetApp } = useAppContext();
+  const { spCoins, spinTokens, resetApp, logout } = useAppContext();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const handleReset = () => {
     if (window.confirm("⚠️ Reset resources to 0 and uncheck all goals?")) resetApp();
   };
 
+  const handleLogout = () => {
+    if (window.confirm("Are you sure you want to log out?")) logout();
+  };
+
   return (
     <>
       {/* MOBILE BOTTOM NAVIGATION BAR */}
       <nav className="fixed bottom-0 left-0 right-0 md:hidden bg-white border-t border-gray-200 z-50 flex items-center justify-between px-4 py-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3">
           <Link href="/" className={`flex flex-col items-center gap-1 ${pathname === '/' ? 'text-blue-600 font-bold' : 'text-gray-500'}`}>
-            <Target size={22} />
+            <Target size={20} />
             <span className="text-[10px]">Targets</span>
           </Link>
           <Link href="/rewards" className={`flex flex-col items-center gap-1 ${pathname === '/rewards' ? 'text-blue-600 font-bold' : 'text-gray-500'}`}>
-            <Gift size={22} />
+            <Gift size={20} />
             <span className="text-[10px]">Rewards</span>
           </Link>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div id="sp-resource" className="flex items-center gap-1 bg-yellow-100 text-yellow-700 px-2.5 py-1 rounded-lg text-xs font-bold border border-yellow-200">
+        <div className="flex items-center gap-1.5">
+          <div id="sp-resource" className="flex items-center gap-1 bg-yellow-100 text-yellow-700 px-2 py-1.5 rounded-lg text-xs font-bold border border-yellow-200">
             <Coins size={14} />
             <span>{spCoins}</span>
           </div>
-          <div id="token-resource" className="flex items-center gap-1 bg-purple-100 text-purple-700 px-2.5 py-1 rounded-lg text-xs font-bold border border-purple-200">
+          <div id="token-resource" className="flex items-center gap-1 bg-purple-100 text-purple-700 px-2 py-1.5 rounded-lg text-xs font-bold border border-purple-200">
             <Dices size={14} />
             <span>{spinTokens}</span>
           </div>
-          <button onClick={handleReset} className="p-2 bg-red-50 text-red-600 rounded-lg border border-red-200">
+          <button onClick={handleReset} className="p-1.5 bg-red-50 text-red-600 rounded-lg border border-red-200 ml-1">
             <RotateCcw size={14} />
           </button>
-          <button onClick={logout} className={`flex items-center gap-2 bg-gray-100 text-gray-700 p-2.5 rounded-xl font-bold shadow-sm justify-center border border-gray-200 hover:bg-gray-200 mt-2 ${isCollapsed ? 'flex-col text-xs' : ''}`}>
-            {!isCollapsed && <span>Logout</span>}
+          <button onClick={handleLogout} className="p-1.5 bg-gray-100 text-gray-700 rounded-lg border border-gray-200">
+            <LogOut size={14} />
           </button>
         </div>
       </nav>
@@ -77,13 +81,17 @@ export default function Sidebar() {
             <Coins size={18} className="shrink-0" />
             {!isCollapsed && <span>{spCoins} SP</span>}
           </div>
-          <div className={`flex items-center gap-2 bg-purple-100 text-purple-700 p-2.5 rounded-xl font-bold shadow-sm justify-center border border-yellow-200 ${isCollapsed ? 'flex-col text-xs' : ''}`}>
+          <div className={`flex items-center gap-2 bg-purple-100 text-purple-700 p-2.5 rounded-xl font-bold shadow-sm justify-center border border-purple-200 ${isCollapsed ? 'flex-col text-xs' : ''}`}>
             <Dices size={18} className="shrink-0" />
             {!isCollapsed && <span>{spinTokens} Tokens</span>}
           </div>
           <button onClick={handleReset} className={`flex items-center gap-2 bg-red-50 text-red-600 p-2.5 rounded-xl font-bold shadow-sm justify-center border border-red-200 hover:bg-red-100 mt-2 ${isCollapsed ? 'flex-col text-xs' : ''}`}>
             <RotateCcw size={16} className="shrink-0" />
             {!isCollapsed && <span>Reset All</span>}
+          </button>
+          <button onClick={handleLogout} className={`flex items-center gap-2 bg-gray-100 text-gray-700 p-2.5 rounded-xl font-bold shadow-sm justify-center border border-gray-200 hover:bg-gray-200 mt-1 ${isCollapsed ? 'flex-col text-xs' : ''}`}>
+            <LogOut size={16} className="shrink-0" />
+            {!isCollapsed && <span>Logout</span>}
           </button>
         </div>
       </nav>
