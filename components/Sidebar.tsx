@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Target, Gift, Coins, Dices, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
-import { useAppContext } from "../context/AppContext";
+const { spCoins, spinTokens, resetApp, logout } = useAppContext();
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -41,6 +41,9 @@ export default function Sidebar() {
           </div>
           <button onClick={handleReset} className="p-2 bg-red-50 text-red-600 rounded-lg border border-red-200">
             <RotateCcw size={14} />
+          </button>
+          <button onClick={logout} className={`flex items-center gap-2 bg-gray-100 text-gray-700 p-2.5 rounded-xl font-bold shadow-sm justify-center border border-gray-200 hover:bg-gray-200 mt-2 ${isCollapsed ? 'flex-col text-xs' : ''}`}>
+            {!isCollapsed && <span>Logout</span>}
           </button>
         </div>
       </nav>
