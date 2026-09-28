@@ -6,7 +6,18 @@ import AuthScreen from "../components/AuthScreen";
 import { User } from "@supabase/supabase-js";
 
 export interface ChildTask { id: string; title: string; reward: number; isCompleted: boolean; isClaimed?: boolean; }
-export interface Goal { id: string; title: string; type: "weekly" | "daily"; frequency?: "once" | "day-night"; reward: number; isCompleted: boolean; isClaimed?: boolean; children: ChildTask[]; }
+export interface Milestone { id: string; at: number; reward: number; isClaimed: boolean; }
+export interface ListItem { id: string; title: string; isCompleted: boolean; } 
+
+export interface Goal { 
+  id: string; title: string; 
+  type: "weekly" | "daily" | "list"; 
+  frequency?: "once" | "day-night"; 
+  reward: number; isCompleted: boolean; isClaimed?: boolean; 
+  children: ChildTask[];
+  targetCount?: number; milestones?: Milestone[]; listItems?: ListItem[];
+  listHasCheckboxes?: boolean; // NEW: Toggle for list mechanics
+}
 export type SliceType = "permanent" | "booster" | "token";
 export interface RewardItem { id: string; type: SliceType; target: string; durationSeconds: number; spinTokens: number; isWildcard?: boolean; }
 export interface WheelSlice { id: string; text: string; color: string; rewards: RewardItem[]; enchantments?: string[]; }
@@ -33,7 +44,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
-  // Core State
   const [spCoins, setSpCoins] = useState(0);
   const [spinTokens, setSpinTokens] = useState(0);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -87,30 +97,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("history", JSON.stringify(history));
 
     if (!user) return;
-
     const timeoutId = setTimeout(async () => {
       await supabase.from('user_data').upsert({
         id: user.id, sp_coins: spCoins, spin_tokens: spinTokens, goals, 
         wheel_slices: wheelSlices, inventory, time_allowances: timeAllowances, history
       });
     }, 2000);
-
     return () => clearTimeout(timeoutId);
   }, [spCoins, spinTokens, goals, wheelSlices, inventory, timeAllowances, history, mounted, user]);
 
   const resetApp = () => {
     setSpCoins(0); setSpinTokens(0); 
-    setGoals(prev => prev.map(g => ({ ...g, isCompleted: false, isClaimed: false, children: g.children.map(c => ({...c, isCompleted: false, isClaimed: false}))})));
+    setGoals(prev => prev.map(g => ({ 
+      ...g, isCompleted: false, isClaimed: false, 
+      children: g.children.map(c => ({...c, isCompleted: false, isClaimed: false})), 
+      milestones: g.milestones?.map(m => ({...m, isClaimed: false})),
+      listItems: g.listItems?.map(l => ({...l, isCompleted: false}))
+    })));
     setInventory([]); setTimeAllowances([]); setHistory([]);
   };
 
   const logout = async () => { await supabase.auth.signOut(); };
 
-  // BYPASS AUTH ON LOCALHOST DEV ENVIRONMENT
   const isDev = process.env.NODE_ENV === 'development';
 
   if (loadingAuth || !mounted) return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold text-gray-500">Loading Sync Engine...</div>;
-  if (!user && !isDev) return <AuthScreen />; // If not dev and not logged in, show AuthScreen
+  if (!user && !isDev) return <AuthScreen />;
 
   return (
     <AppContext.Provider value={{ spCoins, setSpCoins, spinTokens, setSpinTokens, goals, setGoals, wheelSlices, setWheelSlices, inventory, setInventory, timeAllowances, setTimeAllowances, history, setHistory, resetApp, user, logout }}>

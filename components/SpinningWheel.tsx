@@ -8,33 +8,23 @@ import { useAppContext, WheelSlice, RewardItem, SliceType } from "../context/App
 
 const formatTime = (totalSeconds: number) => {
   if (!totalSeconds) return "0s";
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = Math.floor(totalSeconds % 60);
-  let res = [];
-  if (h > 0) res.push(`${h}h`);
-  if (m > 0) res.push(`${m}m`);
-  if (s > 0 || res.length === 0) res.push(`${s}s`);
+  const h = Math.floor(totalSeconds / 3600); const m = Math.floor((totalSeconds % 3600) / 60); const s = Math.floor(totalSeconds % 60);
+  let res = []; if (h > 0) res.push(`${h}h`); if (m > 0) res.push(`${m}m`); if (s > 0 || res.length === 0) res.push(`${s}s`);
   return res.join(' ');
 };
 
-interface SpinningWheelProps {
-  isGlowing?: boolean;
-}
+interface SpinningWheelProps { isGlowing?: boolean; }
 
 export default function SpinningWheel({ isGlowing = false }: SpinningWheelProps) {
-  const { spinTokens, setSpinTokens, wheelSlices, setWheelSlices, inventory, setInventory, timeAllowances, setTimeAllowances, history, setHistory } = useAppContext();
+  const { spinTokens, setSpinTokens, wheelSlices, setWheelSlices, inventory, setInventory, timeAllowances, setTimeAllowances, history, setHistory, setSpCoins } = useAppContext();
   const [activeTab, setActiveTab] = useState<'inventory'|'time'|'entries'|'history'>('entries');
-  
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<WheelSlice>>({});
-  
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [idleRotation, setIdleRotation] = useState(0); 
   const [winner, setWinner] = useState<WheelSlice | null>(null);
   const [announcements, setAnnouncements] = useState<string[]>([]);
-  
   const [activatingWildcardId, setActivatingWildcardId] = useState<string | null>(null);
   const [wildcardTargets, setWildcardTargets] = useState<Record<string, string>>({});
 
@@ -44,28 +34,22 @@ export default function SpinningWheel({ isGlowing = false }: SpinningWheelProps)
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    const ctx = canvasRef.current.getContext("2d");
-    if (!ctx) return;
-    const { width, height } = canvasRef.current;
-    const radius = width / 2;
+    const ctx = canvasRef.current.getContext("2d"); if (!ctx) return;
+    const { width, height } = canvasRef.current; const radius = width / 2;
     ctx.clearRect(0, 0, width, height);
 
     if (wheelSlices.length === 0) { ctx.beginPath(); ctx.arc(radius, radius, radius, 0, 2 * Math.PI); ctx.fillStyle = "#e5e7eb"; ctx.fill(); return; }
     const sliceAngle = (2 * Math.PI) / wheelSlices.length;
 
     wheelSlices.forEach((item, index) => {
-      const startAngle = index * sliceAngle - Math.PI / 2;
-      const endAngle = startAngle + sliceAngle;
+      const startAngle = index * sliceAngle - Math.PI / 2; const endAngle = startAngle + sliceAngle;
       ctx.beginPath(); ctx.moveTo(radius, radius); ctx.arc(radius, radius, radius, startAngle, endAngle); ctx.closePath();
       ctx.fillStyle = item.color; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "#ffffff"; ctx.stroke();
       ctx.save(); ctx.translate(radius, radius); ctx.rotate(startAngle + sliceAngle / 2); ctx.textAlign = "right"; ctx.fillStyle = "#1e293b"; ctx.font = "bold 14px Inter, sans-serif";
       
       const totalSec = item.rewards?.reduce((acc, r) => acc + (r.durationSeconds || 0), 0) || 0;
       const tks = item.rewards?.reduce((acc, r) => acc + (r.spinTokens || 0), 0) || 0;
-      
-      let extra = [];
-      if (totalSec > 0) extra.push(formatTime(totalSec));
-      if (tks > 0) extra.push(`${tks}Tk`);
+      let extra = []; if (totalSec > 0) extra.push(formatTime(totalSec)); if (tks > 0) extra.push(`${tks}Tk`);
       const txt = `${item.enchantments?.length ? '✨' : ''}${item.text || 'Slice'} ${extra.length ? `(${extra.join('+')})` : ''}`;
       
       ctx.fillText(txt, radius - 25, 5); ctx.restore();
@@ -108,8 +92,7 @@ export default function SpinningWheel({ isGlowing = false }: SpinningWheelProps)
                 let cut = perms[Math.floor(Math.random() * perms.length)]; let add = perms.find(p => p.reward.id !== cut.reward.id);
                 if (add) {
                     let oldCut = cut.reward.durationSeconds; let oldAdd = add.reward.durationSeconds;
-                    cut.reward.durationSeconds = Math.max(0, oldCut - 120);
-                    add.reward.durationSeconds = oldAdd + (ench === "Altering I" ? 180 : 240);
+                    cut.reward.durationSeconds = Math.max(0, oldCut - 120); add.reward.durationSeconds = oldAdd + (ench === "Altering I" ? 180 : 240);
                     localAnnounce.push(`${ench}: "${cut.reward.target}" ${formatTime(oldCut)}->${formatTime(cut.reward.durationSeconds)}. "${add.reward.target}" ${formatTime(oldAdd)}->${formatTime(add.reward.durationSeconds)}`);
                 }
             }
@@ -179,9 +162,8 @@ export default function SpinningWheel({ isGlowing = false }: SpinningWheelProps)
     if (missingWildcards.length > 0) { setActivatingWildcardId(invItem.id); return; }
 
     slice.rewards.forEach(reward => {
-      if (reward.type === 'token') {
-         setSpinTokens(prev => prev + (reward.spinTokens || 1));
-      } else {
+      if (reward.type === 'token') { setSpinTokens(prev => prev + (reward.spinTokens || 1)); } 
+      else {
          const targetName = reward.isWildcard ? wildcardTargets[reward.id] : reward.target;
          if (targetName && reward.durationSeconds) {
             setTimeAllowances(prev => {
@@ -196,8 +178,20 @@ export default function SpinningWheel({ isGlowing = false }: SpinningWheelProps)
          }
       }
     });
-
     setInventory(prev => prev.filter(i => i.id !== invItem.id)); setActivatingWildcardId(null); setWildcardTargets({});
+  };
+
+  // Trash Mechanic
+  const trashInventoryItem = (e: React.MouseEvent, id: string) => {
+    const refund = Math.floor(Math.random() * (44 - 25 + 1)) + 25; // Random between 25 and 44
+    setSpCoins(prev => prev + refund);
+    setInventory(prev => prev.filter(i => i.id !== id));
+    
+    // Confetti pop on the trash button
+    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    const x = (rect.left + rect.width / 2) / window.innerWidth;
+    const y = (rect.top + rect.height / 2) / window.innerHeight;
+    confetti({ particleCount: 30, spread: 50, origin: { x, y }, colors: ['#facc15', '#fbbf24'] });
   };
 
   return (
@@ -217,12 +211,9 @@ export default function SpinningWheel({ isGlowing = false }: SpinningWheelProps)
         )}
         <div className="relative w-72 h-72 md:w-96 md:h-96">
           <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-20 w-0 h-0 border-l-[15px] border-l-transparent border-r-[15px] border-r-transparent border-t-[30px] border-t-slate-800 drop-shadow-md"></div>
-          
-          {/* Wheel Circle with Glow Prop */}
           <div className={`w-full h-full rounded-full overflow-hidden border-4 transition-transform ease-out ${isGlowing ? 'border-fuchsia-400 shadow-[0_0_40px_rgba(217,70,239,0.8)]' : 'shadow-2xl border-white'}`} style={{ transform: `rotate(${isSpinning ? rotation : rotation + idleRotation}deg)`, transitionDuration: isSpinning ? '4000ms' : '0ms' }}>
             <canvas ref={canvasRef} width={400} height={400} className="w-full h-full"/>
           </div>
-
           <button onClick={spinWheel} disabled={isSpinning || wheelSlices.length === 0 || spinTokens < 1} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 bg-white rounded-full shadow-2xl z-10 flex flex-col items-center justify-center font-black text-slate-800 hover:scale-110 active:scale-95 transition-transform disabled:opacity-50 disabled:hover:scale-100 uppercase tracking-wide border-4 border-slate-100">
             <span className="text-xl">SPIN</span><span className="text-[10px] text-purple-600 flex items-center gap-1 mt-1"><Dices size={12}/> 1</span>
           </button>
@@ -238,7 +229,6 @@ export default function SpinningWheel({ isGlowing = false }: SpinningWheelProps)
           ))}
         </div>
 
-        {/* Removed 'absolute inset-0' which crashed the layout height */}
         <div className="flex-1 relative overflow-x-hidden overflow-y-auto custom-scrollbar">
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }} className="p-4 md:p-6 space-y-4">
@@ -252,7 +242,7 @@ export default function SpinningWheel({ isGlowing = false }: SpinningWheelProps)
                     const hasWildcard = item.slice.rewards.some(r => r.isWildcard && r.type !== 'token');
                     
                     return (
-                      <div key={item.id} className="flex flex-col bg-gray-50 border border-gray-200 p-4 rounded-xl shadow-sm mb-3">
+                      <div key={item.id} className="flex flex-col bg-gray-50 border border-gray-200 p-4 rounded-xl shadow-sm mb-3 group relative">
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="font-bold text-gray-900 flex items-center gap-1">
@@ -260,11 +250,19 @@ export default function SpinningWheel({ isGlowing = false }: SpinningWheelProps)
                             </p>
                             <p className="text-xs text-gray-400 uppercase font-bold tracking-wider mt-1">{item.slice.rewards.map(r => r.type).join(' + ')}</p>
                           </div>
-                          {activatingWildcardId !== item.id && (
-                            <button onClick={() => activateInventoryItem(item)} className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-blue-700 transition-all shrink-0 ml-2">
-                              {hasWildcard ? 'Configure' : 'Activate'}
-                            </button>
-                          )}
+                          
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            {activatingWildcardId !== item.id && (
+                              <>
+                                <button onClick={(e) => trashInventoryItem(e, item.id)} className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors border border-transparent group-hover:border-red-100" title="Trash for 25-44 SP">
+                                  <Trash2 size={18} />
+                                </button>
+                                <button onClick={() => activateInventoryItem(item)} className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-blue-700 transition-all">
+                                  {hasWildcard ? 'Configure' : 'Activate'}
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
                         {activatingWildcardId === item.id && (
                           <div className="mt-3 space-y-2 w-full border-t border-gray-200 pt-2">
@@ -313,39 +311,23 @@ export default function SpinningWheel({ isGlowing = false }: SpinningWheelProps)
                             {editForm.rewards?.map((reward, idx) => (
                                <div key={reward.id} className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-gray-900 relative">
                                  <button onClick={() => setEditForm({...editForm, rewards: editForm.rewards?.filter(r => r.id !== reward.id)})} className="absolute top-2 right-2 text-red-400 hover:text-red-600"><Trash2 size={14}/></button>
-                                 
                                  <div className="grid grid-cols-2 gap-2 text-xs mb-2 pr-6">
                                    <div><label className="font-bold text-[10px] text-gray-500 uppercase">Type</label>
-                                     <select value={reward.type} onChange={e => {
-                                         let newRewards = [...editForm.rewards!]; newRewards[idx].type = e.target.value as SliceType; setEditForm({...editForm, rewards: newRewards});
-                                     }} className="w-full border rounded p-1"><option value="permanent">Permanent</option><option value="booster">Booster</option><option value="token">Token Only</option></select>
+                                     <select value={reward.type} onChange={e => { let newRewards = [...editForm.rewards!]; newRewards[idx].type = e.target.value as SliceType; setEditForm({...editForm, rewards: newRewards}); }} className="w-full border rounded p-1"><option value="permanent">Permanent</option><option value="booster">Booster</option><option value="token">Token Only</option></select>
                                    </div>
-                                   
                                    {reward.type !== 'token' && (
                                      <div><label className="font-bold text-[10px] text-gray-500 uppercase flex justify-between">Target <label className="flex items-center gap-1 text-blue-600"><input type="checkbox" checked={!!reward.isWildcard} onChange={e => { let newR = [...editForm.rewards!]; newR[idx].isWildcard = e.target.checked; setEditForm({...editForm, rewards: newR}); }}/> Wildcard</label></label>
-                                       <input type="text" value={reward.target} disabled={reward.isWildcard} placeholder={reward.isWildcard ? 'Dynamic' : 'e.g. Threads'} onChange={e => {
-                                           let newRewards = [...editForm.rewards!]; newRewards[idx].target = e.target.value; setEditForm({...editForm, rewards: newRewards});
-                                       }} className="w-full border rounded p-1 disabled:opacity-50"/>
+                                       <input type="text" value={reward.target} disabled={reward.isWildcard} placeholder={reward.isWildcard ? 'Dynamic' : 'e.g. Threads'} onChange={e => { let newRewards = [...editForm.rewards!]; newRewards[idx].target = e.target.value; setEditForm({...editForm, rewards: newRewards}); }} className="w-full border rounded p-1 disabled:opacity-50"/>
                                      </div>
                                    )}
                                  </div>
-
                                  {reward.type !== 'token' ? (
                                    <div>
                                       <label className="font-bold text-[10px] text-gray-500 uppercase">Duration (H/M/S)</label>
                                       <div className="flex gap-2">
-                                        <input type="number" placeholder="H" value={Math.floor(reward.durationSeconds / 3600)} onChange={e => {
-                                           let newR = [...editForm.rewards!]; let h = Number(e.target.value); let m = Math.floor((newR[idx].durationSeconds % 3600)/60); let s = newR[idx].durationSeconds % 60;
-                                           newR[idx].durationSeconds = (h*3600)+(m*60)+s; setEditForm({...editForm, rewards: newR});
-                                        }} className="w-1/3 border rounded p-1"/>
-                                        <input type="number" placeholder="M" value={Math.floor((reward.durationSeconds % 3600) / 60)} onChange={e => {
-                                           let newR = [...editForm.rewards!]; let h = Math.floor(newR[idx].durationSeconds / 3600); let m = Number(e.target.value); let s = newR[idx].durationSeconds % 60;
-                                           newR[idx].durationSeconds = (h*3600)+(m*60)+s; setEditForm({...editForm, rewards: newR});
-                                        }} className="w-1/3 border rounded p-1"/>
-                                        <input type="number" placeholder="S" value={reward.durationSeconds % 60} onChange={e => {
-                                           let newR = [...editForm.rewards!]; let h = Math.floor(newR[idx].durationSeconds / 3600); let m = Math.floor((newR[idx].durationSeconds % 3600)/60); let s = Number(e.target.value);
-                                           newR[idx].durationSeconds = (h*3600)+(m*60)+s; setEditForm({...editForm, rewards: newR});
-                                        }} className="w-1/3 border rounded p-1"/>
+                                        <input type="number" placeholder="H" value={Math.floor(reward.durationSeconds / 3600)} onChange={e => { let newR = [...editForm.rewards!]; let h = Number(e.target.value); let m = Math.floor((newR[idx].durationSeconds % 3600)/60); let s = newR[idx].durationSeconds % 60; newR[idx].durationSeconds = (h*3600)+(m*60)+s; setEditForm({...editForm, rewards: newR}); }} className="w-1/3 border rounded p-1"/>
+                                        <input type="number" placeholder="M" value={Math.floor((reward.durationSeconds % 3600) / 60)} onChange={e => { let newR = [...editForm.rewards!]; let h = Math.floor(newR[idx].durationSeconds / 3600); let m = Number(e.target.value); let s = newR[idx].durationSeconds % 60; newR[idx].durationSeconds = (h*3600)+(m*60)+s; setEditForm({...editForm, rewards: newR}); }} className="w-1/3 border rounded p-1"/>
+                                        <input type="number" placeholder="S" value={reward.durationSeconds % 60} onChange={e => { let newR = [...editForm.rewards!]; let h = Math.floor(newR[idx].durationSeconds / 3600); let m = Math.floor((newR[idx].durationSeconds % 3600)/60); let s = Number(e.target.value); newR[idx].durationSeconds = (h*3600)+(m*60)+s; setEditForm({...editForm, rewards: newR}); }} className="w-1/3 border rounded p-1"/>
                                       </div>
                                    </div>
                                  ) : (
