@@ -5,7 +5,6 @@ import { supabase } from "../lib/supabase";
 import AuthScreen from "../components/AuthScreen";
 import { User } from "@supabase/supabase-js";
 
-// [Keep all your existing Interfaces here (ChildTask, Goal, SliceType, RewardItem, WheelSlice, etcetera)]
 export interface ChildTask { id: string; title: string; reward: number; isCompleted: boolean; isClaimed?: boolean; }
 export interface Goal { id: string; title: string; type: "weekly" | "daily"; frequency?: "once" | "day-night"; reward: number; isCompleted: boolean; isClaimed?: boolean; children: ChildTask[]; }
 export type SliceType = "permanent" | "booster" | "token";
@@ -44,14 +43,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [mounted, setMounted] = useState(false);
 
-  // 1. Check Auth Status
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => { setUser(session?.user ?? null); setLoadingAuth(false); });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => { setUser(session?.user ?? null); });
     return () => subscription.unsubscribe();
   }, []);
 
-  // 2. Load Local Data First (Guarantees data is never lost)
   useEffect(() => {
     const savedCoins = localStorage.getItem("spCoins"); if (savedCoins) setSpCoins(Number(savedCoins)); else setSpCoins(10000); 
     if (localStorage.getItem("spinTokens")) setSpinTokens(Number(localStorage.getItem("spinTokens")));
@@ -63,20 +60,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
-  // 3. MIGRATION & CLOUD PULL
   useEffect(() => {
     if (!mounted || !user) return;
     const fetchCloudData = async () => {
       const { data, error } = await supabase.from('user_data').select('*').eq('id', user.id).single();
-      
       if (data) {
-        // Cloud has data! Overwrite local data to sync across devices.
         setSpCoins(data.sp_coins); setSpinTokens(data.spin_tokens);
         setGoals(data.goals); setWheelSlices(data.wheel_slices);
         setInventory(data.inventory); setTimeAllowances(data.time_allowances); setHistory(data.history);
       } else if (error && error.code === 'PGRST116') {
-        // No cloud data found! This is your FIRST login. 
-        // We push your existing LOCAL data up to Supabase safely.
         await supabase.from('user_data').insert({
           id: user.id, sp_coins: spCoins, spin_tokens: spinTokens, goals, 
           wheel_slices: wheelSlices, inventory, time_allowances: timeAllowances, history
@@ -87,10 +79,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, mounted]); 
 
-  // 4. BACKGROUND CLOUD SAVE (Debounced to save automatically)
   useEffect(() => {
     if (!mounted) return;
-    // Always save to localStorage immediately for snappy usage
     localStorage.setItem("spCoins", spCoins.toString()); localStorage.setItem("spinTokens", spinTokens.toString());
     localStorage.setItem("goals", JSON.stringify(goals)); localStorage.setItem("wheelSlices", JSON.stringify(wheelSlices));
     localStorage.setItem("inventory", JSON.stringify(inventory)); localStorage.setItem("timeAllowances", JSON.stringify(timeAllowances));
@@ -98,7 +88,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     if (!user) return;
 
-    // Wait 2 seconds before pushing to Supabase so we don't spam the database
     const timeoutId = setTimeout(async () => {
       await supabase.from('user_data').upsert({
         id: user.id, sp_coins: spCoins, spin_tokens: spinTokens, goals, 
@@ -117,8 +106,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => { await supabase.auth.signOut(); };
 
+  // BYPASS AUTH ON LOCALHOST DEV ENVIRONMENT
+  const isDev = process.env.NODE_ENV === 'development';
+
   if (loadingAuth || !mounted) return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold text-gray-500">Loading Sync Engine...</div>;
-  if (!user) return <AuthScreen />;
+  if (!user && !isDev) return <AuthScreen />; // If not dev and not logged in, show AuthScreen
 
   return (
     <AppContext.Provider value={{ spCoins, setSpCoins, spinTokens, setSpinTokens, goals, setGoals, wheelSlices, setWheelSlices, inventory, setInventory, timeAllowances, setTimeAllowances, history, setHistory, resetApp, user, logout }}>
