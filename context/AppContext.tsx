@@ -5,8 +5,19 @@ import { supabase } from "../lib/supabase";
 import AuthScreen from "../components/AuthScreen";
 import { User } from "@supabase/supabase-js";
 
-export interface ChildTask { id: string; title: string; reward: number; isCompleted: boolean; isClaimed?: boolean; }
-export interface Milestone { id: string; at: number; reward: number; isClaimed: boolean; }
+export interface ChildTask { 
+  id: string; title: string; reward: number; 
+  isCompleted: boolean; isClaimed?: boolean; 
+  isOptional?: boolean; isFailed?: boolean; 
+  assignedDays?: string[]; 
+  startTime?: string;
+  endTime?: string;
+  assignOrder?: number;
+}
+export interface Milestone { 
+  id: string; at: number; reward: number; isClaimed: boolean; 
+  isOptional?: boolean; 
+}
 export interface ListItem { id: string; title: string; isCompleted: boolean; } 
 
 export interface Goal { 
@@ -14,9 +25,10 @@ export interface Goal {
   type: "weekly" | "daily" | "list"; 
   frequency?: "once" | "day-night"; 
   reward: number; isCompleted: boolean; isClaimed?: boolean; 
+  isOptional?: boolean; isFailed?: boolean;
   children: ChildTask[];
   targetCount?: number; milestones?: Milestone[]; listItems?: ListItem[];
-  listHasCheckboxes?: boolean; // NEW: Toggle for list mechanics
+  listHasCheckboxes?: boolean; 
 }
 export type SliceType = "permanent" | "booster" | "token";
 export interface RewardItem { id: string; type: SliceType; target: string; durationSeconds: number; spinTokens: number; isWildcard?: boolean; }
