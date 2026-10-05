@@ -193,3 +193,15 @@ export const useAppContext = () => {
   if (!context) throw new Error("useAppContext must be used within AppProvider");
   return context;
 };
+
+export interface FinanceAccount {
+  id: string;
+  name: string;
+  initialBalance?: number; 
+}
+
+export interface FinanceBudget {
+  id: string;
+  name: string;
+  initialBalance?: number; 
+}
