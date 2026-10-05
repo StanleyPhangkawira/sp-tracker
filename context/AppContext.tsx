@@ -37,30 +37,6 @@ export interface InventoryItem { id: string; slice: WheelSlice; timestamp: strin
 export interface TimeAllowance { target: string; permanentSeconds: number; boosterSeconds: number; lastUpdated: string; }
 export interface HistoryItem { id: string; result: string; timestamp: string; }
 
-export type TransactionType = "Income" | "Spending" | "Move";
-export interface FinanceCategory { id: string; name: string; type: "Income" | "Spending"; }
-export interface FinanceAccount { id: string; name: string; }
-export interface FinanceBudget { id: string; name: string; }
-export interface Transaction {
-  id: string;
-  name: string;
-  type: TransactionType;
-  amount: number;
-  categoryId: string;
-  accountId: string;
-  budgetId: string;
-  // For Move transactions: destination account/budget
-  toAccountId?: string;
-  toBudgetId?: string;
-  timestamp: string;
-}
-export interface FinanceData {
-  transactions: Transaction[];
-  categories: FinanceCategory[];
-  accounts: FinanceAccount[];
-  budgets: FinanceBudget[];
-}
-
 interface AppContextType {
   spCoins: number; setSpCoins: React.Dispatch<React.SetStateAction<number>>;
   spinTokens: number; setSpinTokens: React.Dispatch<React.SetStateAction<number>>;
@@ -69,7 +45,6 @@ interface AppContextType {
   inventory: InventoryItem[]; setInventory: React.Dispatch<React.SetStateAction<InventoryItem[]>>;
   timeAllowances: TimeAllowance[]; setTimeAllowances: React.Dispatch<React.SetStateAction<TimeAllowance[]>>;
   history: HistoryItem[]; setHistory: React.Dispatch<React.SetStateAction<HistoryItem[]>>;
-  financeData: FinanceData; setFinanceData: React.Dispatch<React.SetStateAction<FinanceData>>;
   resetApp: () => void;
   user: User | null;
   logout: () => void;
@@ -88,21 +63,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [timeAllowances, setTimeAllowances] = useState<TimeAllowance[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const defaultFinanceData: FinanceData = {
-    transactions: [],
-    categories: [
-      { id: "cat-1", name: "Salary", type: "Income" },
-      { id: "cat-2", name: "Freelance", type: "Income" },
-      { id: "cat-3", name: "Food", type: "Spending" },
-      { id: "cat-4", name: "Transport", type: "Spending" },
-      { id: "cat-5", name: "Entertainment", type: "Spending" },
-      { id: "cat-6", name: "Shopping", type: "Spending" },
-      { id: "cat-7", name: "Bills", type: "Spending" },
-    ],
-    accounts: [{ id: "acc-1", name: "Wallet" }],
-    budgets: [{ id: "bud-1", name: "General" }],
-  };
-  const [financeData, setFinanceData] = useState<FinanceData>(defaultFinanceData);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -119,7 +79,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (localStorage.getItem("inventory")) setInventory(JSON.parse(localStorage.getItem("inventory")!));
     if (localStorage.getItem("timeAllowances")) setTimeAllowances(JSON.parse(localStorage.getItem("timeAllowances")!));
     if (localStorage.getItem("history")) setHistory(JSON.parse(localStorage.getItem("history")!));
-    if (localStorage.getItem("financeData")) setFinanceData(JSON.parse(localStorage.getItem("financeData")!));
     setMounted(true);
   }, []);
 
@@ -131,12 +90,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setSpCoins(data.sp_coins); setSpinTokens(data.spin_tokens);
         setGoals(data.goals); setWheelSlices(data.wheel_slices);
         setInventory(data.inventory); setTimeAllowances(data.time_allowances); setHistory(data.history);
-        if (data.finance_data) setFinanceData(data.finance_data);
       } else if (error && error.code === 'PGRST116') {
         await supabase.from('user_data').insert({
           id: user.id, sp_coins: spCoins, spin_tokens: spinTokens, goals, 
-          wheel_slices: wheelSlices, inventory, time_allowances: timeAllowances, history,
-          finance_data: financeData
+          wheel_slices: wheelSlices, inventory, time_allowances: timeAllowances, history
         });
       }
     };
@@ -150,18 +107,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("goals", JSON.stringify(goals)); localStorage.setItem("wheelSlices", JSON.stringify(wheelSlices));
     localStorage.setItem("inventory", JSON.stringify(inventory)); localStorage.setItem("timeAllowances", JSON.stringify(timeAllowances));
     localStorage.setItem("history", JSON.stringify(history));
-    localStorage.setItem("financeData", JSON.stringify(financeData));
 
     if (!user) return;
     const timeoutId = setTimeout(async () => {
       await supabase.from('user_data').upsert({
         id: user.id, sp_coins: spCoins, spin_tokens: spinTokens, goals, 
-        wheel_slices: wheelSlices, inventory, time_allowances: timeAllowances, history,
-        finance_data: financeData
+        wheel_slices: wheelSlices, inventory, time_allowances: timeAllowances, history
       });
     }, 2000);
     return () => clearTimeout(timeoutId);
-  }, [spCoins, spinTokens, goals, wheelSlices, inventory, timeAllowances, history, financeData, mounted, user]);
+  }, [spCoins, spinTokens, goals, wheelSlices, inventory, timeAllowances, history, mounted, user]);
 
   const resetApp = () => {
     setSpCoins(0); setSpinTokens(0); 
@@ -182,7 +137,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   if (!user && !isDev) return <AuthScreen />;
 
   return (
-    <AppContext.Provider value={{ spCoins, setSpCoins, spinTokens, setSpinTokens, goals, setGoals, wheelSlices, setWheelSlices, inventory, setInventory, timeAllowances, setTimeAllowances, history, setHistory, financeData, setFinanceData, resetApp, user, logout }}>
+    <AppContext.Provider value={{ spCoins, setSpCoins, spinTokens, setSpinTokens, goals, setGoals, wheelSlices, setWheelSlices, inventory, setInventory, timeAllowances, setTimeAllowances, history, setHistory, resetApp, user, logout }}>
       {children}
     </AppContext.Provider>
   );
@@ -193,15 +148,3 @@ export const useAppContext = () => {
   if (!context) throw new Error("useAppContext must be used within AppProvider");
   return context;
 };
-
-export interface FinanceAccount {
-  id: string;
-  name: string;
-  initialBalance?: number; 
-}
-
-export interface FinanceBudget {
-  id: string;
-  name: string;
-  initialBalance?: number; 
-}
