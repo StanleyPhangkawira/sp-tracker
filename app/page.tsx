@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import confetti from "canvas-confetti";
 import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion";
 import type { Variants } from "framer-motion";
-import { Plus, Settings2, Trash2, CheckCircle2, Circle, Sun, Moon, LayoutGrid, GripHorizontal, GripVertical, ChevronDown, ChevronUp, LayoutList, Coins, Target, Calendar, Map, Star, XOctagon, FoldVertical, UnfoldVertical, MoreHorizontal, X, ChevronLeft, ChevronRight, ArrowRightLeft, Clock, Check, ChevronsLeft, LogOut } from "lucide-react";
+import { Plus, Settings2, Trash2, CheckCircle2, Circle, Sun, Moon, LayoutGrid, GripHorizontal, GripVertical, ChevronDown, ChevronUp, LayoutList, Coins, Target, Calendar, Map, Star, XOctagon, FoldVertical, UnfoldVertical, MoreHorizontal, X, ChevronLeft, ChevronRight, ArrowRightLeft, Clock, Check, ChevronsLeft, LogOut, EyeOff, Eye, Copy, CheckCheck } from "lucide-react";
 import { useAppContext, Goal } from "../context/AppContext";
 
 type SubTask = Goal["children"][number] & {
@@ -114,18 +114,19 @@ function findScrollParent(node: HTMLElement | null): HTMLElement | Window {
 export type AssignItemType = {
   id: string; goalId: string; title: string; goalTitle: string; 
   isDaily: boolean; icon?: string; isFailed?: boolean; isOptional?: boolean;
+  isCompleted?: boolean; isClaimed?: boolean;
   startTime?: string; endTime?: string; assignOrder?: number;
+  isGoalItself?: boolean;
 };
 
 type AssignDrag = {
   item: AssignItemType; sourceDay: string; targetDay: string; targetIndex: number;
   width: number; height: number; grabX: number; grabY: number;
-  fresh: boolean; // true until the pointer first changes target; lets the origin slot appear at full size (no jump on pick-up)
+  fresh: boolean; 
 };
 
-const ASSIGN_GAP = 12; // px; must equal the mb-3 on assign cards
+const ASSIGN_GAP = 12;
 
-// Timed items first (by clock time), then untimed by assignOrder.
 const sortAssignItems = (a: { startTime?: string; assignOrder?: number }, b: { startTime?: string; assignOrder?: number }) => {
   if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
   if (a.startTime) return -1;
@@ -133,8 +134,6 @@ const sortAssignItems = (a: { startTime?: string; assignOrder?: number }, b: { s
   return (a.assignOrder || 0) - (b.assignOrder || 0);
 };
 
-// Because of that sort order, a drop index is only honest if it respects it. Clamping here means the drop slot
-// is shown exactly where the card will really end up.
 function clampDropIndex(others: AssignItemType[], index: number, dragged: { startTime?: string }) {
   const timed = others.filter(i => i.startTime);
   if (!dragged.startTime) return Math.max(index, timed.length);
@@ -142,11 +141,9 @@ function clampDropIndex(others: AssignItemType[], index: number, dragged: { star
 }
 
 const collapsingVariants: Variants = {
-  // `custom` comes from <AnimatePresence custom>: true = skip the exit animation.
   exit: (instant: boolean) => ({ height: 0, marginBottom: 0, opacity: 0, transition: { duration: instant ? 0 : 0.18, ease: "easeOut" } }),
 };
 
-/** A row that grows/shrinks its height (and gap) smoothly, so the boxes and cards around it glide instead of jumping. */
 function CollapsingRow({ height, startOpen, children }: { height: number; startOpen?: boolean; children: React.ReactNode }) {
   return (
     <motion.div
@@ -180,12 +177,6 @@ const GOAL_TYPE_OPTIONS: DropdownOption<"weekly" | "daily" | "list">[] = [
   { value: "list", label: "List (Progress)" },
 ];
 
-/**
- * Replacement for the native <select>. The menu is portalled to <body> with fixed positioning, so it is never clipped by
- * the collapsing/overflow-hidden panels or the transformed swipe container it lives in. Supports keyboard
- * (arrows / Home / End / Esc / Enter), outside-click, and flips upward when there is no room below.
- * Pass `renderTrigger` + `className` to use it as a custom button (e.g. the mobile "Move" button).
- */
 function Dropdown<T extends string>({ value, options, onChange, title, align = "left", className = "", renderTrigger }: {
   value: T; options: DropdownOption<T>[]; onChange: (v: T) => void;
   title?: string; align?: "left" | "right"; className?: string; renderTrigger?: () => React.ReactNode;
@@ -212,7 +203,6 @@ function Dropdown<T extends string>({ value, options, onChange, title, align = "
     });
   };
 
-  // Focus the selected (or first enabled) option once the menu is mounted.
   useEffect(() => {
     if (!open) return;
     const selected = options.findIndex(o => o.value === value && !o.disabled);
@@ -319,8 +309,9 @@ export default function TargetsPage() {
   const [isAssignMode, setIsAssignMode] = useState(false);
   const [showRewards, setShowRewards] = useState(true);
   const [showTime, setShowTime] = useState(true);
+  const [hideFinishedAssign, setHideFinishedAssign] = useState(false);
   const [mobileAssignIndex, setMobileAssignIndex] = useState(0);
-  const swipeControls = useDragControls(); // day-swipe on mobile; started manually so it never fights a card drag
+  const swipeControls = useDragControls();
   const edgeDir = useRef(0);
   const edgeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [enableTimeSetting, setEnableTimeSetting] = useState(false);
@@ -331,6 +322,7 @@ export default function TargetsPage() {
   const [recentlyCompleted, setRecentlyCompleted] = useState<string[]>([]);
   const [collapsedGoals, setCollapsedGoals] = useState<string[]>([]);
   const [expandedChildId, setExpandedChildId] = useState<string | null>(null);
+  const [copiedListId, setCopiedListId] = useState<string | null>(null);
 
   // MAIN MODE DRAG STATE
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -339,7 +331,7 @@ export default function TargetsPage() {
   const swapLock = useRef(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // ASSIGN MODE DRAG STATE (pointer-based)
+  // ASSIGN MODE DRAG STATE
   const [assignDrag, setAssignDrag] = useState<AssignDrag | null>(null);
   const assignDragRef = useRef<AssignDrag | null>(null);
   const assignPointer = useRef({ x: 0, y: 0 });
@@ -406,7 +398,7 @@ export default function TargetsPage() {
     setGoals([{ id, title: "", type: "weekly", reward: 0, isCompleted: false, isClaimed: false, children: [] }, ...goals]);
     setEditingGoalId(id);
   };
-  const updateGoal = (id: string, updates: Partial<Goal>) => setGoals(goals.map(g => g.id === id ? { ...g, ...updates } : g));
+  const updateGoal = (id: string, updates: any) => setGoals(goals.map(g => g.id === id ? { ...g, ...updates } : g));
   const deleteGoal = (id: string) => setGoals(goals.filter(g => g.id !== id));
 
   const addChildTask = (goalId: string) => {
@@ -433,6 +425,13 @@ export default function TargetsPage() {
   const deleteListItem = (goalId: string, itemId: string) => {
     const goal = goals.find(g => g.id === goalId); if (!goal) return;
     updateGoal(goalId, { listItems: goal.listItems?.filter(i => i.id !== itemId) });
+  };
+
+  const handleCopyList = (goalId: string, items: {title: string}[]) => {
+    const text = items.map(i => i.title).join('\n');
+    navigator.clipboard.writeText(text);
+    setCopiedListId(goalId);
+    setTimeout(() => setCopiedListId(null), 2000);
   };
 
   const handleGoalCheck = (goal: Goal) => {
@@ -486,7 +485,7 @@ export default function TargetsPage() {
 
   // ASSIGN MODE DATA HELPER
   const getAssignItemsForDay = (day: string, source: Goal[] = goals) => {
-    const items = source.flatMap(g => {
+    let items = source.flatMap(g => {
       if (g.isFailed) return [];
       if (g.type === 'daily') {
         const goalIcon = g.title.includes('☀️') ? '☀️' : g.title.includes('🌙') ? '🌙' : '';
@@ -496,24 +495,63 @@ export default function TargetsPage() {
           return { ...c, goalId: g.id, goalTitle: g.title, isDaily: true, icon } as AssignItemType;
         });
       }
-      return g.children.filter(c => {
+
+      const childrenItems = g.children.filter(c => {
         const assigned = c.assignedDays || [];
         return day === 'Unorganized' ? assigned.length === 0 : assigned.includes(day);
       }).map(c => ({ ...c, goalId: g.id, goalTitle: g.title, isDaily: false }) as AssignItemType);
+
+      if (g.children.length === 0 && g.type !== 'list') {
+        const assigned = (g as any).assignedDays || [];
+        const matchDay = day === 'Unorganized' ? assigned.length === 0 : assigned.includes(day);
+        if (matchDay) {
+          return [{
+            id: g.id,
+            goalId: g.id,
+            title: g.title || "Untitled Goal",
+            goalTitle: "Main Goal",
+            isDaily: false,
+            isGoalItself: true,
+            assignedDays: assigned,
+            startTime: (g as any).startTime,
+            endTime: (g as any).endTime,
+            assignOrder: (g as any).assignOrder,
+            isFailed: g.isFailed,
+            isOptional: g.isOptional,
+            isCompleted: g.isCompleted,
+            isClaimed: g.isClaimed
+          } as AssignItemType];
+        }
+      }
+
+      return childrenItems;
     });
+    
+    if (hideFinishedAssign) {
+      items = items.filter(i => !i.isCompleted && !i.isClaimed);
+    }
+    
     return items.sort(sortAssignItems);
   };
 
+  const updateAssignItemTime = (item: AssignItemType, updates: { startTime?: string; endTime?: string; assignedDays?: string[] }) => {
+    const g = goals.find(x => x.id === item.goalId);
+    if (!g) return;
+    if (item.isGoalItself) {
+       updateGoal(g.id, updates);
+    } else {
+       updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, ...updates } : c) });
+    }
+  };
+
   // ASSIGN MODE DRAG LOGIC
-  // Where would the dragged card land for a pointer at (x, y)? Returns { day, index } or null (keep the last target).
   const computeAssignTarget = (x: number, y: number) => {
     const drag = assignDragRef.current; if (!drag) return null;
 
-    // Nearest day box (distance 0 when inside), so the gaps between boxes never lose the target.
     let nearest: { el: HTMLElement; dist: number } | null = null;
     for (const el of Array.from(document.querySelectorAll<HTMLElement>("[data-assign-day]"))) {
       const r = el.getBoundingClientRect();
-      if (!r.width) continue; // the other breakpoint's (hidden) view
+      if (!r.width) continue;
       const dist = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom));
       if (!nearest || dist < nearest.dist) nearest = { el, dist };
     }
@@ -526,8 +564,6 @@ export default function TargetsPage() {
     if (!list) return null;
     const cards = Array.from(list.querySelectorAll<HTMLElement>("[data-assign-item]"));
 
-    // Pick the slot whose centre is closest to the pointer. Slot positions come from card *heights* only (never from
-    // animated rects), so the result can't feed back into the animation and flicker.
     const localY = y - list.getBoundingClientRect().top;
     let top = 0, index = 0, best = Infinity;
     for (let i = 0; i <= cards.length; i++) {
@@ -547,7 +583,6 @@ export default function TargetsPage() {
     window.getSelection()?.removeAllRanges();
     if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(12);
 
-    // Touch: the grabbed card unmounts while dragging, so pin the pointer to a stable element or events can stop.
     if (e.pointerType !== "mouse") { try { document.documentElement.setPointerCapture(e.pointerId); } catch {} }
 
     const rect = card.getBoundingClientRect();
@@ -590,7 +625,6 @@ export default function TargetsPage() {
     scheduleAssignUpdate();
   };
 
-  // Mobile only shows one day at a time: holding a card at the screen edge flips to the neighbouring day.
   const updateEdgeSwitch = (x: number) => {
     const drag = assignDragRef.current;
     const mobile = window.innerWidth < 768;
@@ -611,7 +645,7 @@ export default function TargetsPage() {
 
   useEffect(() => {
     if (!assignDragRef.current) return;
-    const t = setTimeout(scheduleAssignUpdate, 350); // after the day slide-in has finished
+    const t = setTimeout(scheduleAssignUpdate, 350); 
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mobileAssignIndex]);
@@ -623,20 +657,23 @@ export default function TargetsPage() {
     const newDays = drag.targetDay === 'Unorganized' ? [] : [drag.targetDay];
 
     setGoals(prev => {
-      // Same list the user saw on screen (failed goals etc. excluded), so the index maps 1:1.
       const order = getAssignItemsForDay(drag.targetDay, prev).filter(i => i.id !== drag.item.id);
       order.splice(clampDropIndex(order, drag.targetIndex, drag.item), 0, drag.item);
-      // Plain object on purpose: lucide's `Map` icon import shadows the global Map.
       const orderMap: Record<string, number> = {};
       order.forEach((it, idx) => { orderMap[it.id] = idx; });
 
-      return prev.map(g => ({
-        ...g,
-        children: g.children.map(c => {
-          if (c.id === drag.item.id) return { ...c, assignedDays: newDays, assignOrder: orderMap[c.id] };
-          return orderMap[c.id] !== undefined ? { ...c, assignOrder: orderMap[c.id] } : c;
-        }),
-      }));
+      return prev.map(g => {
+        if (g.id === drag.item.id && drag.item.isGoalItself) {
+           return { ...g, assignedDays: newDays, assignOrder: orderMap[g.id] };
+        }
+        return {
+          ...g,
+          children: g.children.map(c => {
+            if (c.id === drag.item.id) return { ...c, assignedDays: newDays, assignOrder: orderMap[c.id] };
+            return orderMap[c.id] !== undefined ? { ...c, assignOrder: orderMap[c.id] } : c;
+          }),
+        };
+      });
     });
   };
 
@@ -647,7 +684,7 @@ export default function TargetsPage() {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", endAssignDrag);
     window.addEventListener("pointercancel", cancelAssignDrag);
-    window.addEventListener("scroll", scheduleAssignUpdate, { passive: true }); // re-aim when the page scrolls under a still pointer
+    window.addEventListener("scroll", scheduleAssignUpdate, { passive: true }); 
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("pointermove", onMove);
@@ -662,36 +699,39 @@ export default function TargetsPage() {
   // -----------------------------------------------------------
   // APP-WIDE PROGRESS & SP CALCULATIONS
   // -----------------------------------------------------------
-  let totalMustDoApp = 0; let totalProgressApp = 0; let totalFailedApp = 0;
-  let totalSP = 0; let claimedSP = 0;
+  let totalMustDoApp = 0; 
+  let totalProgressApp = 0; 
+  let totalFailedApp = 0;
+  let totalSP = 0; 
+  let claimedSP = 0;
 
   goals.forEach(goal => {
-    totalSP += goal.reward || 0; if (goal.isClaimed) claimedSP += goal.reward || 0;
+    totalSP += goal.reward || 0; 
+    if (goal.isClaimed) claimedSP += goal.reward || 0;
+    
     goal.children.forEach(c => { totalSP += c.reward || 0; if (c.isClaimed) claimedSP += c.reward || 0; });
     goal.milestones?.forEach(m => { totalSP += m.reward || 0; if (m.isClaimed) claimedSP += m.reward || 0; });
 
-    if (goal.isOptional) return;
-    totalMustDoApp += 1;
-    let blueFrac = 0; let redFrac = 0;
-
-    const hasChildren = goal.type !== 'list' && goal.children.length > 0;
-    const completedListCount = goal.listItems?.filter(i => goal.listHasCheckboxes === false ? true : i.isCompleted).length || 0;
-
     if (goal.type === 'list') {
-      blueFrac = Math.min(1, completedListCount / (goal.targetCount || 1));
-      if (goal.isFailed) redFrac = 1 - blueFrac; 
-    } else if (hasChildren) {
-      const mustDo = goal.children.filter(c => !c.isOptional);
-      if (mustDo.length > 0) {
-        blueFrac = mustDo.filter(c => c.isClaimed).length / mustDo.length;
-        redFrac = mustDo.filter(c => c.isFailed && !c.isClaimed).length / mustDo.length;
-      } else {
-        if (goal.isFailed) redFrac = 1; else if (goal.isClaimed) blueFrac = 1;
-      }
+       if (!goal.isOptional) {
+         totalMustDoApp += 1;
+         const completedListCount = goal.listItems?.filter(i => goal.listHasCheckboxes === false ? true : i.isCompleted).length || 0;
+         const frac = Math.min(1, completedListCount / (goal.targetCount || 1));
+         totalProgressApp += frac;
+         if (goal.isFailed) totalFailedApp += 1 - frac;
+       }
+    } else if (goal.children.length > 0) {
+       const mustDo = goal.children.filter(c => !c.isOptional);
+       totalMustDoApp += mustDo.length;
+       totalProgressApp += mustDo.filter(c => c.isClaimed || c.isCompleted).length;
+       totalFailedApp += mustDo.filter(c => c.isFailed && !c.isClaimed && !c.isCompleted).length;
     } else {
-      if (goal.isFailed) redFrac = 1; else if (goal.isClaimed) blueFrac = 1;
+       if (!goal.isOptional) {
+         totalMustDoApp += 1;
+         if (goal.isClaimed || goal.isCompleted) totalProgressApp += 1;
+         else if (goal.isFailed) totalFailedApp += 1;
+       }
     }
-    totalProgressApp += blueFrac; totalFailedApp += redFrac;
   });
 
   const overallBluePct = totalMustDoApp === 0 ? 0 : Math.round((totalProgressApp / totalMustDoApp) * 100);
@@ -706,12 +746,21 @@ export default function TargetsPage() {
     if (g.type === 'daily') {
       return g.children.filter(c => c.title.includes(todayStr) && !c.isClaimed && !c.isFailed).map(c => {
          let icon = ''; 
-         if (c.title.includes('☀️') || (c.startTime && parseInt(c.startTime) >= 5 && parseInt(c.startTime) < 18)) icon = '☀️';
+         if (c.title.includes('☀️️') || (c.startTime && parseInt(c.startTime) >= 5 && parseInt(c.startTime) < 18)) icon = '☀️';
          if (c.title.includes('🌙') || (c.startTime && (parseInt(c.startTime) >= 18 || parseInt(c.startTime) < 5))) icon = '🌙';
-         return { goalTitle: g.title, childTitle: g.title, icon, id: c.id, isDaily: true, startTime: c.startTime, endTime: c.endTime };
+         return { goalId: g.id, goalTitle: g.title, childTitle: g.title, icon, id: c.id, isDaily: true, startTime: c.startTime, endTime: c.endTime, isOptional: false, isCompleted: c.isCompleted, isMainGoal: false };
       });
     }
-    return g.children.filter(c => c.assignedDays?.includes(todayStr) && !c.isClaimed && !c.isFailed).map(c => ({ goalTitle: g.title, childTitle: c.title, icon: '', id: c.id, isDaily: false, startTime: c.startTime, endTime: c.endTime }));
+
+    const childrenTasks = g.children.filter(c => c.assignedDays?.includes(todayStr) && !c.isClaimed && !c.isFailed).map(c => ({ goalId: g.id, goalTitle: g.title, childTitle: c.title, icon: '', id: c.id, isDaily: false, startTime: c.startTime, endTime: c.endTime, isOptional: c.isOptional, isCompleted: c.isCompleted, isMainGoal: false }));
+    
+    if (g.children.length === 0 && g.type !== 'list') {
+      if ((g as any).assignedDays?.includes(todayStr) && !g.isClaimed && !g.isFailed) {
+          return [{ goalId: g.id, goalTitle: "Main Goal", childTitle: g.title || "Untitled Goal", icon: '', id: g.id, isDaily: false, startTime: (g as any).startTime, endTime: (g as any).endTime, isOptional: g.isOptional, isCompleted: g.isCompleted, isMainGoal: true }];
+      }
+    }
+    
+    return childrenTasks;
   });
 
   todayTasks.sort((a, b) => {
@@ -737,18 +786,36 @@ export default function TargetsPage() {
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 md:mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Targets & Goals</h1>
-          <div className="mt-2 flex flex-col md:flex-row md:items-center gap-3">
-             <div className="w-full md:w-56 h-2.5 bg-gray-200 rounded-full overflow-hidden flex shrink-0">
-               <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${overallBluePct}%` }}></div>
-               <div className="h-full bg-red-400 transition-all duration-500" style={{ width: `${overallRedPct}%` }}></div>
-             </div>
-             <div className="flex items-center gap-2">
-               <span className="text-sm font-bold text-gray-500">{overallBluePct}% Complete</span>
-               <div className="w-1.5 h-1.5 rounded-full bg-gray-300"></div>
-               <span className="text-sm font-bold text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded flex items-center gap-1 shrink-0">
-                 {claimedSP} / {totalSP} <Coins size={14} className="text-yellow-600"/>
-               </span>
-             </div>
+          
+          <div className="mt-3 flex flex-row items-center gap-4">
+            <div className="relative w-14 h-14 shrink-0 flex items-center justify-center">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 64 64">
+                <circle cx="32" cy="32" r="24" stroke="#e5e7eb" strokeWidth="6" fill="none" />
+                {overallRedPct > 0 && (
+                  <circle cx="32" cy="32" r="24" stroke="#f87171" strokeWidth="6" fill="none"
+                    strokeDasharray="150.796"
+                    strokeDashoffset={150.796 - ((overallBluePct + overallRedPct) / 100) * 150.796}
+                    className="transition-all duration-500" />
+                )}
+                <circle cx="32" cy="32" r="24" stroke="#3b82f6" strokeWidth="6" fill="none"
+                  strokeDasharray="150.796"
+                  strokeDashoffset={150.796 - (overallBluePct / 100) * 150.796}
+                  strokeLinecap="round"
+                  className="transition-all duration-500" />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-[11px] font-extrabold text-gray-700">{overallBluePct}%</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <div className="text-sm font-bold text-gray-500">{totalMustDoApp} Total Action Items</div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded flex items-center gap-1 shrink-0">
+                  {claimedSP} / {totalSP} <Coins size={14} className="text-yellow-600"/>
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -756,22 +823,37 @@ export default function TargetsPage() {
           <button onClick={() => setIsAssignMode(!isAssignMode)} className={`px-4 py-2 rounded-xl border shadow-sm font-bold flex items-center gap-2 transition-colors cursor-pointer ${isAssignMode ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>
 
 <Map size={18} />
-{isAssignMode ? <><LogOut size={18} /> Exit Assign Mode</> : <> Assign Mode</>}
+{isAssignMode ? <><LogOut size={18} /> Exit Assign</> : <> Assign</>}
           </button>
 
           {isAssignMode && (
-            <button
-              onClick={() => setEnableTimeSetting(!enableTimeSetting)}
-              className={`px-3.5 py-2 rounded-xl border shadow-sm font-bold text-xs md:text-sm flex items-center gap-2 transition-colors cursor-pointer ${
-                enableTimeSetting 
-                  ? 'bg-lime-500 text-white border-lime-600' 
-                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-              }`}
-              title={enableTimeSetting ? "Hide time inputs" : "Show time inputs"}
-            >
-              <Clock size={16} />
-              <span>Time: {enableTimeSetting ? "Enabled" : "Off"}</span>
-            </button>
+            <>
+              <button
+                onClick={() => setHideFinishedAssign(!hideFinishedAssign)}
+                className={`px-3.5 py-2 rounded-xl border shadow-sm font-bold text-xs md:text-sm flex items-center gap-2 transition-colors cursor-pointer ${
+                  hideFinishedAssign 
+                    ? 'bg-blue-100 text-blue-700 border-blue-200' 
+                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                }`}
+                title={hideFinishedAssign ? "Show finished tasks" : "Hide finished tasks"}
+              >
+                {hideFinishedAssign ? <EyeOff size={16} /> : <Eye size={16} />}
+                <span>Done: {hideFinishedAssign ? "Hidden" : "Shown"}</span>
+              </button>
+
+              <button
+                onClick={() => setEnableTimeSetting(!enableTimeSetting)}
+                className={`px-3.5 py-2 rounded-xl border shadow-sm font-bold text-xs md:text-sm flex items-center gap-2 transition-colors cursor-pointer ${
+                  enableTimeSetting 
+                    ? 'bg-lime-500 text-white border-lime-600' 
+                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                }`}
+                title={enableTimeSetting ? "Hide time inputs" : "Show time inputs"}
+              >
+                <Clock size={16} />
+                <span>Time: {enableTimeSetting ? "Enabled" : "Off"}</span>
+              </button>
+            </>
           )}
           
           <div className="hidden md:flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-200 shadow-sm ml-2">
@@ -816,15 +898,12 @@ export default function TargetsPage() {
       {isAssignMode ? (
         <>
           {/* ASSIGN MODE PC VIEW (Pinterest-style masonry) */}
-          {/* Days are dealt into fixed flex columns instead of CSS `columns`, so a box can never hop to another
-              column while heights change mid-drag. Each column keeps its own height, which is the masonry look. */}
           <div className="hidden md:flex items-start gap-4 md:gap-6 select-none">
             {Array.from({ length: columns }, (_, col) => (
               <div key={col} className="flex-1 min-w-0 flex flex-col gap-4 md:gap-6">
                 {assignDays.filter((_, i) => i % columns === col).map(day => {
                   const allItems = getAssignItemsForDay(day);
                   const isTarget = assignDrag?.targetDay === day;
-                  // The dragged card is lifted out of every list; the drop slot stands in for it.
                   const visibleItems = assignDrag ? allItems.filter(i => i.id !== assignDrag.item.id) : allItems;
                   const slot = isTarget && assignDrag ? Math.min(assignDrag.targetIndex, visibleItems.length) : -1;
                   const slotHeight = assignDrag?.height ?? 0;
@@ -841,12 +920,11 @@ export default function TargetsPage() {
                         {day} <span className="bg-gray-100 text-gray-500 text-sm font-semibold px-2.5 py-0.5 rounded-full">{allItems.length}</span>
                       </h3>
 
-                      {/* Cards use mb-3 instead of flex-gap so the drop slot can animate its gap together with its height; -mb-3 cancels the trailing one. */}
                       <div data-assign-list className="flex flex-col -mb-3">
-                        {/* custom = true -> exits are instant (on drop), so the real card replaces the slot without a height flash. */}
                         <AnimatePresence initial={false} custom={!assignDrag}>
                           {visibleItems.flatMap((item, idx) => {
                             const isTimed = !!item.startTime;
+                            const isDone = item.isCompleted || item.isClaimed;
                             return [
                               idx === slot && <DropSlot key={`slot-${idx}`} height={slotHeight} startOpen={startOpen} />,
                               <div
@@ -858,7 +936,9 @@ export default function TargetsPage() {
                                   beginAssignDrag(e, item, day);
                                 }}
                                 className={`mb-3 p-3 rounded-xl border text-sm transition-colors group select-none touch-none cursor-grab active:cursor-grabbing ${
-                                  isTimed
+                                  isDone 
+                                    ? 'bg-gray-50 border-gray-200 opacity-70' 
+                                    : isTimed
                                     ? 'bg-lime-50/90 border-lime-300 hover:border-lime-400 shadow-sm'
                                     : item.isDaily
                                     ? 'bg-blue-50 border-blue-100 hover:border-blue-200'
@@ -875,11 +955,11 @@ export default function TargetsPage() {
                                  </div>
                                  <div className="flex-1 min-w-0 flex flex-col">
                                    {item.isDaily ? (
-                                      <div className="font-bold text-gray-800 text-sm truncate">{item.goalTitle} {item.icon}</div>
+                                      <div className={`font-bold text-sm truncate ${isDone ? 'text-gray-400 line-through' : 'text-gray-800'}`}>{item.goalTitle} {item.icon}</div>
                                    ) : (
                                       <>
                                         <div className="text-[10px] text-gray-400 font-bold mb-0.5 truncate uppercase tracking-wider">{item.goalTitle}</div>
-                                        <div className={`font-semibold text-sm truncate ${item.isFailed ? 'text-red-400 line-through' : 'text-gray-800'}`}>
+                                        <div className={`font-semibold text-sm truncate ${item.isFailed ? 'text-red-400 line-through' : isDone ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
                                           {item.isOptional && <Star size={12} className="inline mr-1 text-yellow-400 mb-0.5" />}
                                           {item.title}
                                         </div>
@@ -893,10 +973,12 @@ export default function TargetsPage() {
                                           <button
                                             type="button"
                                             onClick={() => setEditingTimeId(editingTimeId === item.id ? null : item.id)}
-                                            className="bg-lime-200/80 hover:bg-lime-300 border border-lime-300 text-lime-900 text-[10px] font-bold rounded px-2 py-0.5 flex items-center gap-1 cursor-pointer transition-colors"
+                                            className={`border text-[10px] font-bold rounded px-2 py-0.5 flex items-center gap-1 cursor-pointer transition-colors ${
+                                              isDone ? 'bg-gray-200/80 border-gray-300 text-gray-600' : 'bg-lime-200/80 hover:bg-lime-300 border-lime-300 text-lime-900'
+                                            }`}
                                             title="Click to edit or remove time"
                                           >
-                                            <Clock size={11} className="text-lime-700" />
+                                            <Clock size={11} className={isDone ? 'text-gray-500' : 'text-lime-700'} />
                                             <span>{item.startTime} {item.endTime ? `- ${item.endTime}` : ''}</span>
                                           </button>
                                         )}
@@ -905,26 +987,19 @@ export default function TargetsPage() {
                                           <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-lime-300 shadow-sm animate-in fade-in z-10" data-nodrag>
                                             <input 
                                               type="time" value={item.startTime || ''} 
-                                              onChange={(e) => {
-                                                const g = goals.find(x => x.id === item.goalId);
-                                                if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, startTime: e.target.value } : c) });
-                                              }} 
+                                              onChange={(e) => updateAssignItemTime(item, { startTime: e.target.value })} 
                                               className="bg-gray-50 border border-gray-200 text-gray-700 text-[10px] rounded px-1.5 py-0.5 outline-none focus:border-lime-500 cursor-pointer" 
                                             />
                                             <span className="text-gray-400 text-xs">-</span>
                                             <input 
                                               type="time" value={item.endTime || ''} 
-                                              onChange={(e) => {
-                                                const g = goals.find(x => x.id === item.goalId);
-                                                if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, endTime: e.target.value } : c) });
-                                              }} 
+                                              onChange={(e) => updateAssignItemTime(item, { endTime: e.target.value })} 
                                               className="bg-gray-50 border border-gray-200 text-gray-700 text-[10px] rounded px-1.5 py-0.5 outline-none focus:border-lime-500 cursor-pointer" 
                                             />
                                             <button 
                                               type="button"
                                               onClick={() => {
-                                                const g = goals.find(x => x.id === item.goalId);
-                                                if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, startTime: undefined, endTime: undefined } : c) });
+                                                updateAssignItemTime(item, { startTime: undefined, endTime: undefined });
                                                 setEditingTimeId(null);
                                               }} 
                                               title="Remove time (make untimed)"
@@ -950,19 +1025,13 @@ export default function TargetsPage() {
                                            <Clock size={11} className="text-gray-400 ml-0.5" />
                                            <input 
                                              type="time" value={item.startTime || ''} 
-                                             onChange={(e) => {
-                                               const g = goals.find(x => x.id === item.goalId);
-                                               if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, startTime: e.target.value } : c) });
-                                             }} 
+                                             onChange={(e) => updateAssignItemTime(item, { startTime: e.target.value })} 
                                              className="bg-white border border-gray-200 text-gray-700 text-[10px] rounded px-1.5 py-0.5 outline-none focus:border-blue-400 cursor-pointer" 
                                            />
                                            <span className="text-gray-400 text-xs">-</span>
                                            <input 
                                              type="time" value={item.endTime || ''} 
-                                             onChange={(e) => {
-                                               const g = goals.find(x => x.id === item.goalId);
-                                               if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, endTime: e.target.value } : c) });
-                                             }} 
+                                             onChange={(e) => updateAssignItemTime(item, { endTime: e.target.value })} 
                                              className="bg-white border border-gray-200 text-gray-700 text-[10px] rounded px-1.5 py-0.5 outline-none focus:border-blue-400 cursor-pointer" 
                                            />
                                            {editingTimeId === item.id && (
@@ -1007,7 +1076,7 @@ export default function TargetsPage() {
             ))}
           </div>
 
-          {/* Floating drag card (PC). Same width as the source card and anchored at the grab point, so nothing "pops" when the drag starts. */}
+          {/* Floating drag card (PC). */}
           {assignDrag && (
             <div
               ref={(el) => { floatingCardRef.current = el; if (el) placeFloatingCard(); }}
@@ -1087,13 +1156,16 @@ From {assignDrag.sourceDay}
                        <AnimatePresence initial={false} custom={!assignDrag}>
                        {visibleItems.flatMap((item, idx) => {
                          const isTimed = !!item.startTime;
+                         const isDone = item.isCompleted || item.isClaimed;
                          return [
                            idx === slot && <DropSlot key={`slot-${idx}`} height={slotHeight} startOpen={startOpen} />,
                            <div 
                              key={item.id} 
                              data-assign-item
                              className={`mb-3 p-4 rounded-2xl border text-sm flex items-start justify-between gap-3 shadow-sm transition-colors ${
-                               isTimed 
+                               isDone 
+                                 ? 'bg-gray-50 border-gray-200 opacity-70'
+                                 : isTimed 
                                  ? 'bg-lime-50 border-lime-300' 
                                  : item.isDaily 
                                  ? 'bg-blue-50 border-blue-100' 
@@ -1110,11 +1182,11 @@ From {assignDrag.sourceDay}
                              </div>
                              <div className="flex-1 min-w-0">
                                 {item.isDaily ? (
-                                   <div className="font-bold text-gray-800 text-base truncate">{item.goalTitle} {item.icon}</div>
+                                   <div className={`font-bold text-base truncate ${isDone ? 'text-gray-400 line-through' : 'text-gray-800'}`}>{item.goalTitle} {item.icon}</div>
                                 ) : (
                                    <>
                                      <div className="text-[10px] text-gray-400 font-bold mb-0.5 truncate uppercase tracking-wider">{item.goalTitle}</div>
-                                     <div className={`font-semibold text-base truncate ${item.isFailed ? 'text-red-400 line-through' : 'text-gray-800'}`}>
+                                     <div className={`font-semibold text-base truncate ${item.isFailed ? 'text-red-400 line-through' : isDone ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
                                        {item.isOptional && <Star size={12} className="inline mr-1 text-yellow-400 mb-0.5" />}
                                        {item.title}
                                      </div>
@@ -1125,8 +1197,8 @@ From {assignDrag.sourceDay}
                                 {isTimed ? (
                                    <div className="mt-2.5 flex items-center gap-2 flex-wrap">
                                      {showTime && (
-                                       <span className="bg-lime-200/80 border border-lime-300 text-lime-900 text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
-                                         <Clock size={12} className="text-lime-700" />
+                                       <span className={`border text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-1 ${isDone ? 'bg-gray-200/80 border-gray-300 text-gray-600' : 'bg-lime-200/80 border-lime-300 text-lime-900'}`}>
+                                         <Clock size={12} className={isDone ? 'text-gray-500' : 'text-lime-700'} />
                                          {item.startTime} {item.endTime ? `- ${item.endTime}` : ''}
                                        </span>
                                      )}
@@ -1141,8 +1213,7 @@ From {assignDrag.sourceDay}
                                        <button 
                                          type="button"
                                          onClick={() => {
-                                           const g = goals.find(x => x.id === item.goalId);
-                                           if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, startTime: undefined, endTime: undefined } : c) });
+                                           updateAssignItemTime(item, { startTime: undefined, endTime: undefined });
                                            setEditingTimeId(null);
                                          }}
                                          className="text-xs text-red-500 font-semibold cursor-pointer flex items-center gap-0.5"
@@ -1165,25 +1236,19 @@ From {assignDrag.sourceDay}
                                    )
                                 )}
 
-                                {/* Mobile Time Inputs when editing or when enableTimeSetting is on */}
+                                {/* Mobile Time Inputs */}
                                 {((!isTimed && enableTimeSetting) || editingTimeId === item.id) && (
                                   <div className="mt-3 flex items-center gap-2 bg-white/80 p-2 rounded-xl border border-gray-200 animate-in fade-in">
                                     <Clock size={14} className="text-gray-400" />
                                     <input 
                                       type="time" value={item.startTime || ''} 
-                                      onChange={(e) => {
-                                        const g = goals.find(x => x.id === item.goalId);
-                                        if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, startTime: e.target.value } : c) });
-                                      }} 
+                                      onChange={(e) => updateAssignItemTime(item, { startTime: e.target.value })} 
                                       className="bg-white border border-gray-200 text-gray-700 text-xs rounded px-2 py-1 outline-none w-20 text-center cursor-pointer" 
                                     />
                                     <span className="text-gray-400 text-xs">-</span>
                                     <input 
                                       type="time" value={item.endTime || ''} 
-                                      onChange={(e) => {
-                                        const g = goals.find(x => x.id === item.goalId);
-                                        if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, endTime: e.target.value } : c) });
-                                      }} 
+                                      onChange={(e) => updateAssignItemTime(item, { endTime: e.target.value })} 
                                       className="bg-white border border-gray-200 text-gray-700 text-xs rounded px-2 py-1 outline-none w-20 text-center cursor-pointer" 
                                     />
                                     {editingTimeId === item.id && !isTimed && (
@@ -1201,10 +1266,8 @@ From {assignDrag.sourceDay}
                                  title="Move to" align="right" value={day}
                                  options={assignDays.map(d => ({ value: d, label: d, disabled: d === day }))}
                                  onChange={(d) => {
-                                   const g = goals.find(x => x.id === item.goalId);
-                                   if (!g) return;
                                    const newDays = d === 'Unorganized' ? [] : [d];
-                                   updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, assignedDays: newDays } : c) });
+                                   updateAssignItemTime(item, { assignedDays: newDays });
                                  }}
                                  className="bg-gray-100 hover:bg-gray-200 active:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer outline-none"
                                  renderTrigger={() => <><ArrowRightLeft size={14}/> Move</>}
@@ -1240,16 +1303,32 @@ From {assignDrag.sourceDay}
              {todayTasks.length > 0 ? (
                <ul className="flex flex-col gap-2">
                  {todayTasks.map(t => (
-                   <li key={t.id} className="bg-white border border-blue-50 p-3 rounded-xl flex items-center justify-between gap-3 shadow-sm">
-                     <div className="flex flex-col justify-center min-w-0">
-                       {t.isDaily ? (
-                          <span className="text-sm font-bold text-gray-800 truncate">{t.childTitle} {t.icon}</span>
-                       ) : (
-                          <>
-                            <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider truncate">{t.goalTitle}</span>
-                            <span className="text-sm font-semibold text-gray-800 truncate">{t.childTitle}</span>
-                          </>
-                       )}
+                   <li key={t.id} className="bg-white border border-blue-50 p-3 rounded-xl flex items-center justify-between gap-3 shadow-sm hover:bg-blue-50/50 transition-colors">
+                     <div className="flex items-center gap-3 min-w-0">
+                       <button 
+                         onClick={() => {
+                            const goal = goals.find(g => g.id === t.goalId);
+                            if (!goal) return;
+                            if (t.isMainGoal) handleGoalCheck(goal);
+                            else handleChildCheck(goal, t.id);
+                         }}
+                         className="flex items-center shrink-0 transition-transform cursor-pointer hover:scale-110"
+                       >
+                         {t.isCompleted ? <CheckCircle2 size={22} className="text-blue-500" /> : <Circle size={22} className="text-gray-300 hover:text-blue-400" />}
+                       </button>
+                       <div className="flex flex-col justify-center min-w-0">
+                         {t.isDaily ? (
+                            <span className={`text-sm font-bold truncate ${t.isCompleted ? 'text-gray-400 line-through' : 'text-gray-800'}`}>{t.childTitle} {t.icon}</span>
+                         ) : (
+                            <>
+                              <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider truncate">{t.goalTitle}</span>
+                              <span className={`text-sm font-semibold truncate ${t.isCompleted ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+                                {t.isOptional && <Star size={12} className="inline mr-1 text-yellow-400 mb-0.5" />}
+                                {t.childTitle}
+                              </span>
+                            </>
+                         )}
+                       </div>
                      </div>
                      {showTime && t.startTime && (
                        <div className="shrink-0 text-[10px] md:text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded-md flex items-center gap-1 border border-blue-200">
@@ -1279,7 +1358,9 @@ From {assignDrag.sourceDay}
             {goals.map((goal) => {
               const hasChildren = goal.type !== 'list' && goal.children.length > 0;
               const hasMilestones = goal.type === 'list' && (goal.milestones?.length || 0) > 0;
-              const allChildrenClaimed = hasChildren && goal.children.every(c => c.isClaimed);
+              
+              const mustDoChildren = hasChildren ? goal.children.filter(c => !c.isOptional) : [];
+              const allMandatoryClaimed = hasChildren && (mustDoChildren.length === 0 || mustDoChildren.every(c => c.isClaimed));
               const allMilestonesClaimed = hasMilestones && goal.milestones?.every(m => m.isClaimed);
               const completedListCount = goal.listItems?.filter(i => goal.listHasCheckboxes === false ? true : i.isCompleted).length || 0;
 
@@ -1288,10 +1369,9 @@ From {assignDrag.sourceDay}
                 bluePct = Math.min(100, Math.round((completedListCount / (goal.targetCount || 1)) * 100));
                 if (goal.isFailed) redPct = 100 - bluePct;
               } else if (hasChildren) {
-                const mustDo = goal.children.filter(c => !c.isOptional);
-                if (mustDo.length > 0) {
-                  bluePct = Math.min(100, Math.round((mustDo.filter(c => c.isClaimed).length / mustDo.length) * 100));
-                  redPct = Math.min(100, Math.round((mustDo.filter(c => c.isFailed && !c.isClaimed).length / mustDo.length) * 100));
+                if (mustDoChildren.length > 0) {
+                  bluePct = Math.min(100, Math.round((mustDoChildren.filter(c => c.isClaimed).length / mustDoChildren.length) * 100));
+                  redPct = Math.min(100, Math.round((mustDoChildren.filter(c => c.isFailed && !c.isClaimed).length / mustDoChildren.length) * 100));
                 } else {
                   if (goal.isFailed) redPct = 100; else if (goal.isClaimed) bluePct = 100;
                 }
@@ -1299,7 +1379,9 @@ From {assignDrag.sourceDay}
                 if (goal.isFailed) redPct = 100; else if (goal.isClaimed) bluePct = 100;
               }
 
-              const canClaimMain = (!hasChildren && !hasMilestones && goal.isCompleted && !goal.isClaimed && !goal.isFailed) || (allChildrenClaimed && !goal.isClaimed && hasChildren && !goal.isFailed) || (goal.type === 'list' && bluePct >= 100 && allMilestonesClaimed && !goal.isClaimed && !goal.isFailed);
+              const canClaimMain = (!hasChildren && !hasMilestones && goal.isCompleted && !goal.isClaimed && !goal.isFailed) || 
+                                   (hasChildren && allMandatoryClaimed && !goal.isClaimed && !goal.isFailed) || 
+                                   (goal.type === 'list' && bluePct >= 100 && allMilestonesClaimed && !goal.isClaimed && !goal.isFailed);
 
               return (
                 <DraggableCard
@@ -1445,7 +1527,14 @@ From {assignDrag.sourceDay}
                             <div className="mt-4 bg-gray-50/70 p-3 rounded-xl border border-gray-100 shadow-inner">
                               <div className="flex items-center gap-2 mb-3">
                                 <input type="text" placeholder="Add list item" onKeyDown={(e) => { if (e.key === 'Enter' && e.currentTarget.value.trim()) { addListItem(goal.id, e.currentTarget.value.trim()); e.currentTarget.value = ''; } }} className="flex-1 p-2 text-sm rounded-lg border border-gray-300 text-gray-900 outline-none focus:border-blue-500 placeholder-gray-400 bg-white" />
-                                <span className="text-xs font-bold text-gray-700 bg-white px-2 py-1.5 rounded-md border border-gray-200">{completedListCount} / {goal.targetCount || 10}</span>
+                                <button 
+                                  onClick={() => handleCopyList(goal.id, goal.listItems || [])}
+                                  className="p-2 text-gray-400 hover:text-blue-600 bg-white border border-gray-200 rounded-lg transition-colors cursor-pointer shadow-sm shrink-0"
+                                  title="Copy all items to clipboard"
+                                >
+                                  {copiedListId === goal.id ? <CheckCheck size={16} className="text-green-500" /> : <Copy size={16} />}
+                                </button>
+                                <span className="text-xs font-bold text-gray-700 bg-white px-2 py-1.5 rounded-md border border-gray-200 shrink-0">{completedListCount} / {goal.targetCount || 10}</span>
                               </div>
 
                               <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-1">
@@ -1523,7 +1612,7 @@ From {assignDrag.sourceDay}
                                 {/* Responsive Content & Actions Wrapper */}
                                 <div className="flex-1 w-full overflow-hidden flex flex-col justify-center">
                                    
-                                   {/* Desktop View (Settings Button toggles absolute inline menu) */}
+                                   {/* Desktop View */}
                                    <div className="hidden md:flex items-center w-full min-w-0 h-full">
                                       <div className="flex-1 min-w-0 pr-2 flex flex-col justify-center">
                                         {editingChildId === child.id ? (
@@ -1581,7 +1670,7 @@ From {assignDrag.sourceDay}
                                       </div>
                                    </div>
 
-                                   {/* Mobile View (Horizontal Swipe/Scroll to reveal actions) */}
+                                   {/* Mobile View */}
                                    <div className="md:hidden flex overflow-x-auto snap-x snap-mandatory items-center w-full [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                                       {/* Main Task Face */}
                                       <div className="w-full shrink-0 snap-center flex items-center min-w-0 min-h-[28px]">
@@ -1625,7 +1714,7 @@ From {assignDrag.sourceDay}
                                         )}
                                       </div>
 
-                                      {/* Actions Drawer (Revealed on Swipe) - Extracted inputs for a cleaner view */}
+                                      {/* Actions Drawer */}
                                       {!child.isClaimed && (
                                         <div className="shrink-0 snap-center flex items-center gap-1.5 pl-3 pr-1">
                                            <button onClick={() => updateGoal(goal.id, { children: goal.children.map(c => c.id === child.id ? { ...c, isOptional: !c.isOptional } : c) })} className={`h-7 w-7 flex items-center justify-center rounded-lg cursor-pointer ${child.isOptional ? 'text-yellow-500 bg-yellow-50' : 'text-gray-400 bg-gray-100'}`}><Star size={14} /></button>
