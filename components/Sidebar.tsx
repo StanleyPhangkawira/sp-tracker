@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Target, Gift, Coins, Dices, RotateCcw, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
+import { Target, Gift, Coins, Dices, RotateCcw, ChevronLeft, ChevronRight, LogOut, Wallet } from "lucide-react";
 import { useAppContext } from "../context/AppContext";
 
 export default function Sidebar() {
@@ -31,6 +31,10 @@ export default function Sidebar() {
           <Link href="/rewards" className={`flex flex-col items-center gap-1 ${pathname === '/rewards' ? 'text-blue-600 font-bold' : 'text-gray-500'}`}>
             <Gift size={20} />
             <span className="text-[10px]">Rewards</span>
+          </Link>
+          <Link href="/finance" className={`flex flex-col items-center gap-1 ${pathname === '/finance' ? 'text-blue-600 font-bold' : 'text-gray-500'}`}>
+            <Wallet size={20} />
+            <span className="text-[10px]">Finance</span>
           </Link>
         </div>
 
@@ -73,6 +77,10 @@ export default function Sidebar() {
           <Link href="/rewards" className={`flex items-center gap-2 p-2.5 rounded-xl transition-all ${pathname === '/rewards' ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-500 hover:bg-gray-50'} ${isCollapsed ? 'justify-center' : ''}`}>
             <Gift size={20} className="shrink-0" />
             {!isCollapsed && <span className="text-sm whitespace-nowrap">Rewards</span>}
+          </Link>
+          <Link href="/finance" className={`flex items-center gap-2 p-2.5 rounded-xl transition-all ${pathname === '/finance' ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-500 hover:bg-gray-50'} ${isCollapsed ? 'justify-center' : ''}`}>
+            <Wallet size={20} className="shrink-0" />
+            {!isCollapsed && <span className="text-sm whitespace-nowrap">Finance <span className="text-[8px]">(BETA)</span></span>}
           </Link>
         </div>
 

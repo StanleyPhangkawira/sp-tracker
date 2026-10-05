@@ -115,6 +115,7 @@ export type AssignItemType = {
   id: string; goalId: string; title: string; goalTitle: string; 
   isDaily: boolean; icon?: string; isFailed?: boolean; isOptional?: boolean;
   startTime?: string; endTime?: string; assignOrder?: number;
+  isGoalItself?: boolean;
 };
 
 type AssignDrag = {
@@ -406,7 +407,7 @@ export default function TargetsPage() {
     setGoals([{ id, title: "", type: "weekly", reward: 0, isCompleted: false, isClaimed: false, children: [] }, ...goals]);
     setEditingGoalId(id);
   };
-  const updateGoal = (id: string, updates: Partial<Goal>) => setGoals(goals.map(g => g.id === id ? { ...g, ...updates } : g));
+  const updateGoal = (id: string, updates: any) => setGoals(goals.map(g => g.id === id ? { ...g, ...updates } : g));
   const deleteGoal = (id: string) => setGoals(goals.filter(g => g.id !== id));
 
   const addChildTask = (goalId: string) => {
@@ -496,12 +497,49 @@ export default function TargetsPage() {
           return { ...c, goalId: g.id, goalTitle: g.title, isDaily: true, icon } as AssignItemType;
         });
       }
-      return g.children.filter(c => {
+
+      // Existing sub-children tasks
+      const childrenItems = g.children.filter(c => {
         const assigned = c.assignedDays || [];
         return day === 'Unorganized' ? assigned.length === 0 : assigned.includes(day);
       }).map(c => ({ ...c, goalId: g.id, goalTitle: g.title, isDaily: false }) as AssignItemType);
+
+      // If goal has no children and isn't a list, map it directly as an assignable item itself
+      if (g.children.length === 0 && g.type !== 'list') {
+        const assigned = (g as any).assignedDays || [];
+        const matchDay = day === 'Unorganized' ? assigned.length === 0 : assigned.includes(day);
+        if (matchDay) {
+          return [{
+            id: g.id,
+            goalId: g.id,
+            title: g.title || "Untitled Goal",
+            goalTitle: "Main Goal",
+            isDaily: false,
+            isGoalItself: true, // Flag indicating this represents the parent goal itself
+            assignedDays: assigned,
+            startTime: (g as any).startTime,
+            endTime: (g as any).endTime,
+            assignOrder: (g as any).assignOrder,
+            isFailed: g.isFailed,
+            isOptional: g.isOptional
+          } as AssignItemType];
+        }
+      }
+
+      return childrenItems;
     });
     return items.sort(sortAssignItems);
+  };
+
+  // Helper for safely updating item time/days whether it's a child or the main goal itself
+  const updateAssignItemTime = (item: AssignItemType, updates: { startTime?: string; endTime?: string; assignedDays?: string[] }) => {
+    const g = goals.find(x => x.id === item.goalId);
+    if (!g) return;
+    if (item.isGoalItself) {
+       updateGoal(g.id, updates);
+    } else {
+       updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, ...updates } : c) });
+    }
   };
 
   // ASSIGN MODE DRAG LOGIC
@@ -630,13 +668,18 @@ export default function TargetsPage() {
       const orderMap: Record<string, number> = {};
       order.forEach((it, idx) => { orderMap[it.id] = idx; });
 
-      return prev.map(g => ({
-        ...g,
-        children: g.children.map(c => {
-          if (c.id === drag.item.id) return { ...c, assignedDays: newDays, assignOrder: orderMap[c.id] };
-          return orderMap[c.id] !== undefined ? { ...c, assignOrder: orderMap[c.id] } : c;
-        }),
-      }));
+      return prev.map(g => {
+        if (g.id === drag.item.id && drag.item.isGoalItself) {
+           return { ...g, assignedDays: newDays, assignOrder: orderMap[g.id] };
+        }
+        return {
+          ...g,
+          children: g.children.map(c => {
+            if (c.id === drag.item.id) return { ...c, assignedDays: newDays, assignOrder: orderMap[c.id] };
+            return orderMap[c.id] !== undefined ? { ...c, assignOrder: orderMap[c.id] } : c;
+          }),
+        };
+      });
     });
   };
 
@@ -662,36 +705,42 @@ export default function TargetsPage() {
   // -----------------------------------------------------------
   // APP-WIDE PROGRESS & SP CALCULATIONS
   // -----------------------------------------------------------
-  let totalMustDoApp = 0; let totalProgressApp = 0; let totalFailedApp = 0;
-  let totalSP = 0; let claimedSP = 0;
+  let totalMustDoApp = 0; 
+  let totalProgressApp = 0; 
+  let totalFailedApp = 0;
+  let totalSP = 0; 
+  let claimedSP = 0;
 
   goals.forEach(goal => {
-    totalSP += goal.reward || 0; if (goal.isClaimed) claimedSP += goal.reward || 0;
+    totalSP += goal.reward || 0; 
+    if (goal.isClaimed) claimedSP += goal.reward || 0;
+    
     goal.children.forEach(c => { totalSP += c.reward || 0; if (c.isClaimed) claimedSP += c.reward || 0; });
     goal.milestones?.forEach(m => { totalSP += m.reward || 0; if (m.isClaimed) claimedSP += m.reward || 0; });
 
     if (goal.isOptional) return;
-    totalMustDoApp += 1;
-    let blueFrac = 0; let redFrac = 0;
-
-    const hasChildren = goal.type !== 'list' && goal.children.length > 0;
-    const completedListCount = goal.listItems?.filter(i => goal.listHasCheckboxes === false ? true : i.isCompleted).length || 0;
 
     if (goal.type === 'list') {
-      blueFrac = Math.min(1, completedListCount / (goal.targetCount || 1));
-      if (goal.isFailed) redFrac = 1 - blueFrac; 
-    } else if (hasChildren) {
-      const mustDo = goal.children.filter(c => !c.isOptional);
-      if (mustDo.length > 0) {
-        blueFrac = mustDo.filter(c => c.isClaimed).length / mustDo.length;
-        redFrac = mustDo.filter(c => c.isFailed && !c.isClaimed).length / mustDo.length;
-      } else {
-        if (goal.isFailed) redFrac = 1; else if (goal.isClaimed) blueFrac = 1;
-      }
+       totalMustDoApp += 1;
+       const completedListCount = goal.listItems?.filter(i => goal.listHasCheckboxes === false ? true : i.isCompleted).length || 0;
+       const frac = Math.min(1, completedListCount / (goal.targetCount || 1));
+       totalProgressApp += frac;
+       if (goal.isFailed) totalFailedApp += 1 - frac;
     } else {
-      if (goal.isFailed) redFrac = 1; else if (goal.isClaimed) blueFrac = 1;
+       const mustDoChildren = goal.children.filter(c => !c.isOptional);
+       if (mustDoChildren.length > 0) {
+          totalMustDoApp += mustDoChildren.length;
+          totalProgressApp += mustDoChildren.filter(c => c.isClaimed || c.isCompleted).length;
+          totalFailedApp += mustDoChildren.filter(c => c.isFailed && !c.isClaimed && !c.isCompleted).length;
+       } else {
+          totalMustDoApp += 1;
+          if (goal.isClaimed || goal.isCompleted) {
+             totalProgressApp += 1;
+          } else if (goal.isFailed) {
+             totalFailedApp += 1;
+          }
+       }
     }
-    totalProgressApp += blueFrac; totalFailedApp += redFrac;
   });
 
   const overallBluePct = totalMustDoApp === 0 ? 0 : Math.round((totalProgressApp / totalMustDoApp) * 100);
@@ -711,7 +760,17 @@ export default function TargetsPage() {
          return { goalTitle: g.title, childTitle: g.title, icon, id: c.id, isDaily: true, startTime: c.startTime, endTime: c.endTime };
       });
     }
-    return g.children.filter(c => c.assignedDays?.includes(todayStr) && !c.isClaimed && !c.isFailed).map(c => ({ goalTitle: g.title, childTitle: c.title, icon: '', id: c.id, isDaily: false, startTime: c.startTime, endTime: c.endTime }));
+
+    const childrenTasks = g.children.filter(c => c.assignedDays?.includes(todayStr) && !c.isClaimed && !c.isFailed).map(c => ({ goalTitle: g.title, childTitle: c.title, icon: '', id: c.id, isDaily: false, startTime: c.startTime, endTime: c.endTime }));
+    
+    // Include empty goals mapped to today
+    if (g.children.length === 0 && g.type !== 'list') {
+      if ((g as any).assignedDays?.includes(todayStr) && !g.isClaimed && !g.isFailed) {
+          return [{ goalTitle: "Main Goal", childTitle: g.title || "Untitled Goal", icon: '', id: g.id, isDaily: false, startTime: (g as any).startTime, endTime: (g as any).endTime }];
+      }
+    }
+    
+    return childrenTasks;
   });
 
   todayTasks.sort((a, b) => {
@@ -737,18 +796,37 @@ export default function TargetsPage() {
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 md:mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Targets & Goals</h1>
-          <div className="mt-2 flex flex-col md:flex-row md:items-center gap-3">
-             <div className="w-full md:w-56 h-2.5 bg-gray-200 rounded-full overflow-hidden flex shrink-0">
-               <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${overallBluePct}%` }}></div>
-               <div className="h-full bg-red-400 transition-all duration-500" style={{ width: `${overallRedPct}%` }}></div>
-             </div>
-             <div className="flex items-center gap-2">
-               <span className="text-sm font-bold text-gray-500">{overallBluePct}% Complete</span>
-               <div className="w-1.5 h-1.5 rounded-full bg-gray-300"></div>
-               <span className="text-sm font-bold text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded flex items-center gap-1 shrink-0">
-                 {claimedSP} / {totalSP} <Coins size={14} className="text-yellow-600"/>
-               </span>
-             </div>
+          
+          <div className="mt-3 flex flex-row items-center gap-4">
+            {/* Circular Progress Chart */}
+            <div className="relative w-14 h-14 shrink-0 flex items-center justify-center">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 64 64">
+                <circle cx="32" cy="32" r="24" stroke="#e5e7eb" strokeWidth="6" fill="none" />
+                {overallRedPct > 0 && (
+                  <circle cx="32" cy="32" r="24" stroke="#f87171" strokeWidth="6" fill="none"
+                    strokeDasharray="150.796"
+                    strokeDashoffset={150.796 - ((overallBluePct + overallRedPct) / 100) * 150.796}
+                    className="transition-all duration-500" />
+                )}
+                <circle cx="32" cy="32" r="24" stroke="#3b82f6" strokeWidth="6" fill="none"
+                  strokeDasharray="150.796"
+                  strokeDashoffset={150.796 - (overallBluePct / 100) * 150.796}
+                  strokeLinecap="round"
+                  className="transition-all duration-500" />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-[11px] font-extrabold text-gray-700">{overallBluePct}%</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <div className="text-sm font-bold text-gray-500">{totalMustDoApp} Total Action Items</div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded flex items-center gap-1 shrink-0">
+                  {claimedSP} / {totalSP} <Coins size={14} className="text-yellow-600"/>
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -816,8 +894,6 @@ export default function TargetsPage() {
       {isAssignMode ? (
         <>
           {/* ASSIGN MODE PC VIEW (Pinterest-style masonry) */}
-          {/* Days are dealt into fixed flex columns instead of CSS `columns`, so a box can never hop to another
-              column while heights change mid-drag. Each column keeps its own height, which is the masonry look. */}
           <div className="hidden md:flex items-start gap-4 md:gap-6 select-none">
             {Array.from({ length: columns }, (_, col) => (
               <div key={col} className="flex-1 min-w-0 flex flex-col gap-4 md:gap-6">
@@ -905,26 +981,19 @@ export default function TargetsPage() {
                                           <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-lime-300 shadow-sm animate-in fade-in z-10" data-nodrag>
                                             <input 
                                               type="time" value={item.startTime || ''} 
-                                              onChange={(e) => {
-                                                const g = goals.find(x => x.id === item.goalId);
-                                                if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, startTime: e.target.value } : c) });
-                                              }} 
+                                              onChange={(e) => updateAssignItemTime(item, { startTime: e.target.value })} 
                                               className="bg-gray-50 border border-gray-200 text-gray-700 text-[10px] rounded px-1.5 py-0.5 outline-none focus:border-lime-500 cursor-pointer" 
                                             />
                                             <span className="text-gray-400 text-xs">-</span>
                                             <input 
                                               type="time" value={item.endTime || ''} 
-                                              onChange={(e) => {
-                                                const g = goals.find(x => x.id === item.goalId);
-                                                if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, endTime: e.target.value } : c) });
-                                              }} 
+                                              onChange={(e) => updateAssignItemTime(item, { endTime: e.target.value })} 
                                               className="bg-gray-50 border border-gray-200 text-gray-700 text-[10px] rounded px-1.5 py-0.5 outline-none focus:border-lime-500 cursor-pointer" 
                                             />
                                             <button 
                                               type="button"
                                               onClick={() => {
-                                                const g = goals.find(x => x.id === item.goalId);
-                                                if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, startTime: undefined, endTime: undefined } : c) });
+                                                updateAssignItemTime(item, { startTime: undefined, endTime: undefined });
                                                 setEditingTimeId(null);
                                               }} 
                                               title="Remove time (make untimed)"
@@ -950,19 +1019,13 @@ export default function TargetsPage() {
                                            <Clock size={11} className="text-gray-400 ml-0.5" />
                                            <input 
                                              type="time" value={item.startTime || ''} 
-                                             onChange={(e) => {
-                                               const g = goals.find(x => x.id === item.goalId);
-                                               if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, startTime: e.target.value } : c) });
-                                             }} 
+                                             onChange={(e) => updateAssignItemTime(item, { startTime: e.target.value })} 
                                              className="bg-white border border-gray-200 text-gray-700 text-[10px] rounded px-1.5 py-0.5 outline-none focus:border-blue-400 cursor-pointer" 
                                            />
                                            <span className="text-gray-400 text-xs">-</span>
                                            <input 
                                              type="time" value={item.endTime || ''} 
-                                             onChange={(e) => {
-                                               const g = goals.find(x => x.id === item.goalId);
-                                               if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, endTime: e.target.value } : c) });
-                                             }} 
+                                             onChange={(e) => updateAssignItemTime(item, { endTime: e.target.value })} 
                                              className="bg-white border border-gray-200 text-gray-700 text-[10px] rounded px-1.5 py-0.5 outline-none focus:border-blue-400 cursor-pointer" 
                                            />
                                            {editingTimeId === item.id && (
@@ -1141,8 +1204,7 @@ From {assignDrag.sourceDay}
                                        <button 
                                          type="button"
                                          onClick={() => {
-                                           const g = goals.find(x => x.id === item.goalId);
-                                           if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, startTime: undefined, endTime: undefined } : c) });
+                                           updateAssignItemTime(item, { startTime: undefined, endTime: undefined });
                                            setEditingTimeId(null);
                                          }}
                                          className="text-xs text-red-500 font-semibold cursor-pointer flex items-center gap-0.5"
@@ -1171,19 +1233,13 @@ From {assignDrag.sourceDay}
                                     <Clock size={14} className="text-gray-400" />
                                     <input 
                                       type="time" value={item.startTime || ''} 
-                                      onChange={(e) => {
-                                        const g = goals.find(x => x.id === item.goalId);
-                                        if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, startTime: e.target.value } : c) });
-                                      }} 
+                                      onChange={(e) => updateAssignItemTime(item, { startTime: e.target.value })} 
                                       className="bg-white border border-gray-200 text-gray-700 text-xs rounded px-2 py-1 outline-none w-20 text-center cursor-pointer" 
                                     />
                                     <span className="text-gray-400 text-xs">-</span>
                                     <input 
                                       type="time" value={item.endTime || ''} 
-                                      onChange={(e) => {
-                                        const g = goals.find(x => x.id === item.goalId);
-                                        if (g) updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, endTime: e.target.value } : c) });
-                                      }} 
+                                      onChange={(e) => updateAssignItemTime(item, { endTime: e.target.value })} 
                                       className="bg-white border border-gray-200 text-gray-700 text-xs rounded px-2 py-1 outline-none w-20 text-center cursor-pointer" 
                                     />
                                     {editingTimeId === item.id && !isTimed && (
@@ -1201,10 +1257,8 @@ From {assignDrag.sourceDay}
                                  title="Move to" align="right" value={day}
                                  options={assignDays.map(d => ({ value: d, label: d, disabled: d === day }))}
                                  onChange={(d) => {
-                                   const g = goals.find(x => x.id === item.goalId);
-                                   if (!g) return;
                                    const newDays = d === 'Unorganized' ? [] : [d];
-                                   updateGoal(g.id, { children: g.children.map(c => c.id === item.id ? { ...c, assignedDays: newDays } : c) });
+                                   updateAssignItemTime(item, { assignedDays: newDays });
                                  }}
                                  className="bg-gray-100 hover:bg-gray-200 active:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer outline-none"
                                  renderTrigger={() => <><ArrowRightLeft size={14}/> Move</>}
