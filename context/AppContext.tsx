@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import AuthScreen from "../components/AuthScreen";
 import { User } from "@supabase/supabase-js";
@@ -29,7 +29,6 @@ export interface Goal {
   children: ChildTask[];
   targetCount?: number; milestones?: Milestone[]; listItems?: ListItem[];
   listHasCheckboxes?: boolean; 
-  assignedDays?: string[]; assignOrder?: number; // Assign Mode can place a whole goal on a day
 }
 export type SliceType = "permanent" | "booster" | "token";
 export interface RewardItem { id: string; type: SliceType; target: string; durationSeconds: number; spinTokens: number; isWildcard?: boolean; }
@@ -40,8 +39,8 @@ export interface HistoryItem { id: string; result: string; timestamp: string; }
 
 export type TransactionType = "Income" | "Spending" | "Move";
 export interface FinanceCategory { id: string; name: string; type: "Income" | "Spending"; }
-export interface FinanceAccount { id: string; name: string; initialBalance?: number; }
-export interface FinanceBudget { id: string; name: string; initialBalance?: number; }
+export interface FinanceAccount { id: string; name: string; }
+export interface FinanceBudget { id: string; name: string; }
 export interface Transaction {
   id: string;
   name: string;
@@ -106,20 +105,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [financeData, setFinanceData] = useState<FinanceData>(defaultFinanceData);
   const [mounted, setMounted] = useState(false);
 
-  // --- cloud sync bookkeeping ---
-  const userId = user?.id ?? null;                // depend on the id, never the user object (see auth effect)
-  const [cloudReady, setCloudReady] = useState(false); // true once the cloud copy has been loaded/reconciled for this user
-  const lastSynced = useRef("");                  // JSON of the data we know is in the cloud
-  const saveSeq = useRef(0);
-  const DIRTY_KEY = "cloudDirty";                 // holds the user id while local changes haven't reached the cloud
-
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => { setUser(session?.user ?? null); setLoadingAuth(false); });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      // Supabase re-emits SIGNED_IN / TOKEN_REFRESHED with a brand-new user object whenever the tab regains focus.
-      // Keep the old object when it is the same account so nothing downstream re-runs.
-      setUser(prev => (prev?.id === session?.user?.id ? prev : session?.user ?? null));
-    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => { setUser(session?.user ?? null); });
     return () => subscription.unsubscribe();
   }, []);
 
@@ -135,34 +123,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
-  // Load the cloud copy once per login. If this device has changes that never reached the cloud
-  // (closed the tab inside the save delay, or an earlier save failed), those win and get pushed instead.
   useEffect(() => {
-    setCloudReady(false);
-    lastSynced.current = "";
-    if (!mounted || !userId) return;
-    let cancelled = false;
-    (async () => {
-      const hasUnsyncedLocal = localStorage.getItem(DIRTY_KEY) === userId;
-      const { data, error } = await supabase.from("user_data").select("*").eq("id", userId).maybeSingle();
-      if (cancelled) return;
-      if (error) { console.error("Cloud load failed:", error); return; } // stay local-only this session; never overwrite the cloud blindly
-      if (data && !hasUnsyncedLocal) {
+    if (!mounted || !user) return;
+    const fetchCloudData = async () => {
+      const { data, error } = await supabase.from('user_data').select('*').eq('id', user.id).single();
+      if (data) {
         setSpCoins(data.sp_coins); setSpinTokens(data.spin_tokens);
         setGoals(data.goals); setWheelSlices(data.wheel_slices);
         setInventory(data.inventory); setTimeAllowances(data.time_allowances); setHistory(data.history);
         if (data.finance_data) setFinanceData(data.finance_data);
-        lastSynced.current = JSON.stringify({
-          sp_coins: data.sp_coins, spin_tokens: data.spin_tokens, goals: data.goals, wheel_slices: data.wheel_slices,
-          inventory: data.inventory, time_allowances: data.time_allowances, history: data.history, finance_data: data.finance_data,
+      } else if (error && error.code === 'PGRST116') {
+        await supabase.from('user_data').insert({
+          id: user.id, sp_coins: spCoins, spin_tokens: spinTokens, goals, 
+          wheel_slices: wheelSlices, inventory, time_allowances: timeAllowances, history,
+          finance_data: financeData
         });
       }
-      setCloudReady(true); // no cloud row yet, or local wins: the save effect below pushes local up
-    })();
-    return () => { cancelled = true; };
-  }, [userId, mounted]);
+    };
+    fetchCloudData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, mounted]); 
 
-  // Save: localStorage immediately, cloud after a short debounce.
   useEffect(() => {
     if (!mounted) return;
     localStorage.setItem("spCoins", spCoins.toString()); localStorage.setItem("spinTokens", spinTokens.toString());
@@ -171,24 +152,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("history", JSON.stringify(history));
     localStorage.setItem("financeData", JSON.stringify(financeData));
 
-    if (!userId || !cloudReady) return;
-    const row = {
-      sp_coins: spCoins, spin_tokens: spinTokens, goals, wheel_slices: wheelSlices,
-      inventory, time_allowances: timeAllowances, history, finance_data: financeData,
-    };
-    const body = JSON.stringify(row);
-    if (body === lastSynced.current) { localStorage.removeItem(DIRTY_KEY); return; } // cloud already has exactly this
-
-    localStorage.setItem(DIRTY_KEY, userId);
-    const seq = ++saveSeq.current;
+    if (!user) return;
     const timeoutId = setTimeout(async () => {
-      const { error } = await supabase.from('user_data').upsert({ id: userId, ...row });
-      if (error) { console.error("Cloud save failed (data is still safe in this browser):", error); return; }
-      lastSynced.current = body;
-      if (saveSeq.current === seq) localStorage.removeItem(DIRTY_KEY); // only if nothing newer was queued meanwhile
-    }, 1000);
+      await supabase.from('user_data').upsert({
+        id: user.id, sp_coins: spCoins, spin_tokens: spinTokens, goals, 
+        wheel_slices: wheelSlices, inventory, time_allowances: timeAllowances, history,
+        finance_data: financeData
+      });
+    }, 2000);
     return () => clearTimeout(timeoutId);
-  }, [spCoins, spinTokens, goals, wheelSlices, inventory, timeAllowances, history, financeData, mounted, userId, cloudReady]);
+  }, [spCoins, spinTokens, goals, wheelSlices, inventory, timeAllowances, history, financeData, mounted, user]);
 
   const resetApp = () => {
     setSpCoins(0); setSpinTokens(0); 
@@ -220,3 +193,15 @@ export const useAppContext = () => {
   if (!context) throw new Error("useAppContext must be used within AppProvider");
   return context;
 };
+
+export interface FinanceAccount {
+  id: string;
+  name: string;
+  initialBalance?: number; 
+}
+
+export interface FinanceBudget {
+  id: string;
+  name: string;
+  initialBalance?: number; 
+}
