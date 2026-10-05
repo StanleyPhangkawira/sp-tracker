@@ -834,7 +834,7 @@ export default function TargetsPage() {
           <button onClick={() => setIsAssignMode(!isAssignMode)} className={`px-4 py-2 rounded-xl border shadow-sm font-bold flex items-center gap-2 transition-colors cursor-pointer ${isAssignMode ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>
 
 <Map size={18} />
-{isAssignMode ? <><LogOut size={18} /> Exit Assign Mode</> : <> Assign Mode</>}
+{isAssignMode ? <><LogOut size={18} /> Exit Assign</> : <> Assign</>}
           </button>
 
           {isAssignMode && (
