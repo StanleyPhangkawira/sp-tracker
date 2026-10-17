@@ -706,7 +706,7 @@ export function TargetsPage() {
     const ms = goal.milestones?.find((m) => m.id === milestoneId);
     const completedListCount =
       goal.listItems?.filter((i) => (goal.listHasCheckboxes === false ? true : i.isCompleted)).length || 0;
-    if (ms && !ms.isClaimed && completedListCount >= Math.max(1, m.at)) {
+    if (ms && !ms.isClaimed && completedListCount >= Math.max(1, ms.at)) {
       updateGoal(goal.id, {
         milestones: goal.milestones?.map((m) => (m.id === milestoneId ? { ...m, isClaimed: true } : m)),
       });
