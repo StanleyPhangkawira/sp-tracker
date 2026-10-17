@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { CATEGORIES } from "./QuestShared";
 
+const Utils_Filters = ["All", "weekly", "daily", "list"] as const;
+
 interface QuestToolbarProps {
   isAssignMode: boolean;
   setIsAssignMode: React.Dispatch<React.SetStateAction<boolean>>;
@@ -120,7 +122,7 @@ export default function QuestToolbar({
 
             {/* Filter Pills */}
             <div className="flex items-center h-10 bg-gray-100 dark:bg-slate-800 p-1 rounded-xl border border-gray-200 dark:border-slate-700/80">
-              {(Utils_Filters as const).map((f) => (
+              {Utils_Filters.map((f) => (
                 <button
                   key={f}
                   onClick={() => setActiveFilter(f)}
@@ -344,5 +346,3 @@ export default function QuestToolbar({
     </div>
   );
 }
-
-const Utils_Filters = ["All", "weekly", "daily", "list"] as const;
