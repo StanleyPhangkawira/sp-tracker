@@ -1,26 +1,160 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f4f6fb;
+  --foreground: #0f172a;
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+  --scrollbar-track: rgba(226, 232, 240, 0.45);
+  --scrollbar-thumb: linear-gradient(180deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+  --scrollbar-thumb-hover: linear-gradient(180deg, #4f46e5 0%, #7c3aed 50%, #c026d3 100%);
+  color-scheme: light;
+}
+
+.dark {
+  --background: #030712;
+  --foreground: #f8fafc;
+  --card-bg: #0f172a;
+  --card-border: #1e293b;
+  --scrollbar-track: rgba(15, 23, 42, 0.7);
+  --scrollbar-thumb: linear-gradient(180deg, #4f46e5 0%, #7c3aed 50%, #c026d3 100%);
+  --scrollbar-thumb-hover: linear-gradient(180deg, #6366f1 0%, #8b5cf6 50%, #e879f9 100%);
+  color-scheme: dark;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-rpg-body), "Chakra Petch", system-ui, sans-serif;
+  --font-display: var(--font-rpg-display), "Cinzel", serif;
+  --font-mono: var(--font-rpg-mono), "JetBrains Mono", monospace;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-rpg-body), system-ui, -apple-system, sans-serif;
+  letter-spacing: 0.01em;
+}
+
+/* Game-like RPG Headings & Numeric Readouts */
+h1, h2, h3, .font-rpg-title {
+  font-family: var(--font-rpg-body), system-ui, sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.font-rpg-crest {
+  font-family: var(--font-rpg-display), serif;
+  letter-spacing: 0.05em;
+}
+
+.font-rpg-num {
+  font-family: var(--font-rpg-mono), monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Customized RPG Scrollbars (Global + .custom-scrollbar) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #6366f1 var(--scrollbar-track);
+}
+
+::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track,
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 9999px;
+  margin: 2px;
+}
+
+::-webkit-scrollbar-thumb,
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.35);
+  transition: all 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover,
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.65);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* RPG Progress Bar Shimmer & Surge Animations */
+@keyframes rpg-shimmer {
+  0% {
+    transform: translateX(-100%) skewX(-20deg);
+  }
+  100% {
+    transform: translateX(250%) skewX(-20deg);
+  }
+}
+
+@keyframes rpg-bar-surge {
+  0% {
+    filter: brightness(1) drop-shadow(0 0 0px rgba(99, 102, 241, 0));
+  }
+  40% {
+    filter: brightness(1.35) drop-shadow(0 0 10px rgba(52, 211, 153, 0.9));
+  }
+  100% {
+    filter: brightness(1) drop-shadow(0 0 0px rgba(99, 102, 241, 0));
+  }
+}
+
+.animate-rpg-shimmer {
+  animation: rpg-shimmer 1.65s infinite ease-in-out;
+}
+
+.animate-rpg-surge {
+  animation: rpg-bar-surge 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Custom Styled RPG Range Slider */
+input[type="range"].rpg-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"].rpg-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.25), rgba(168, 85, 247, 0.45));
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+input[type="range"].rpg-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  border: 2px solid #ffffff;
+  margin-top: -6px;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.55);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transform: rotate(45deg);
+}
+
+input[type="range"].rpg-slider::-webkit-slider-thumb:hover {
+  transform: rotate(45deg) scale(1.18);
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.85);
 }
