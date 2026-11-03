@@ -1,20 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Chakra_Petch, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "../context/AppContext";
 import Sidebar from "../components/Sidebar";
-
-const chakraPetch = Chakra_Petch({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-rpg-body",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["500", "700", "800"],
-  variable: "--font-rpg-mono",
-});
 
 export const metadata: Metadata = {
   title: "SP Tracker · RPG Quest Command",
@@ -36,8 +23,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${chakraPetch.variable} ${jetbrainsMono.variable}`}
-      style={{ ["--font-rpg-display" as any]: "'Cinzel', serif" }}
+      style={{
+        ["--font-rpg-body" as any]: "'Chakra Petch', system-ui, sans-serif",
+        ["--font-rpg-mono" as any]: "'JetBrains Mono', monospace",
+        ["--font-rpg-display" as any]: "'Cinzel', serif",
+      }}
     >
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -47,11 +37,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           crossOrigin="anonymous"
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;800;900&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Cinzel:wght@700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body className={`${chakraPetch.className} antialiased selection:bg-indigo-500 selection:text-white`}>
+      <body className="antialiased selection:bg-indigo-500 selection:text-white">
         <AppProvider>
           <div className="flex flex-col md:flex-row min-h-screen bg-slate-100/80 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
             <Sidebar />
