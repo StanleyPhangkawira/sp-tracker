@@ -16,6 +16,8 @@ import {
   ActiveAllowanceTimer,
   RpgSoundType,
   AppContextType,
+  QuestViewConfig,
+  DEFAULT_QUEST_VIEW_CONFIG,
   DEFAULT_STARTER_GOALS,
   DEFAULT_STICKY_NOTES,
   DEFAULT_FINANCE_DATA,
@@ -58,6 +60,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [stickyNotes, setStickyNotes] = useState<StickyNoteItem[]>(DEFAULT_STICKY_NOTES);
   const [dailyBountyClaimedDate, setDailyBountyClaimedDate] = useState<string>("");
   const [activeAllowanceTimer, setActiveAllowanceTimer] = useState<ActiveAllowanceTimer | null>(null);
+  // Quest View Configuration State (persisted to localStorage & Supabase)
+  const [columns, setColumns] = useState<number>(2);
+  const [mobileColumns, setMobileColumns] = useState<number>(1);
+  const [showRewards, setShowRewards] = useState<boolean>(true);
+  const [showTime, setShowTime] = useState<boolean>(true);
+  const [collapsedGoals, setCollapsedGoals] = useState<string[]>([]);
+  const [hideFinishedAssign, setHideFinishedAssign] = useState<boolean>(false);
+  const [isAssignMode, setIsAssignMode] = useState<boolean>(false);
+  const [activeFilter, setActiveFilter] = useState<"All" | "weekly" | "daily" | "list">("All");
+  const [activeCategory, setActiveCategory] = useState<string>("All Areas");
+  const [enableTimeSetting, setEnableTimeSetting] = useState<boolean>(false);
 
   const [mounted, setMounted] = useState(false);
   const cloudSyncReadyRef = useRef(false);
@@ -258,6 +271,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const rawBounty = localStorage.getItem("sp_daily_bounty_date");
       if (rawBounty) setDailyBountyClaimedDate(rawBounty);
+      const rawViewConfig = localStorage.getItem("sp_quest_view_config");
+      if (rawViewConfig) {
+        try {
+          const parsed = JSON.parse(rawViewConfig);
+          if (typeof parsed.columns === "number") setColumns(parsed.columns);
+          if (typeof parsed.mobileColumns === "number") setMobileColumns(parsed.mobileColumns);
+          if (typeof parsed.showRewards === "boolean") setShowRewards(parsed.showRewards);
+          if (typeof parsed.showTime === "boolean") setShowTime(parsed.showTime);
+          if (Array.isArray(parsed.collapsedGoals)) setCollapsedGoals(parsed.collapsedGoals);
+          if (typeof parsed.hideFinishedAssign === "boolean") setHideFinishedAssign(parsed.hideFinishedAssign);
+          if (typeof parsed.isAssignMode === "boolean") setIsAssignMode(parsed.isAssignMode);
+          if (parsed.activeFilter) setActiveFilter(parsed.activeFilter);
+          if (parsed.activeCategory) setActiveCategory(parsed.activeCategory);
+          if (typeof parsed.enableTimeSetting === "boolean") setEnableTimeSetting(parsed.enableTimeSetting);
+        } catch (e) {
+          console.error("Failed to read sp_quest_view_config:", e);
+        }
+      }
     } catch (err) {
       console.error("Failed to read local storage state:", err);
     }
@@ -294,8 +325,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (Array.isArray(data.time_allowances)) setTimeAllowances(data.time_allowances);
           if (Array.isArray(data.history)) setHistory(data.history);
           if (data.finance_data) setFinanceData(data.finance_data);
+          if (data.view_config && typeof data.view_config === "object") {
+            const vc = data.view_config;
+            if (typeof vc.columns === "number") setColumns(vc.columns);
+            if (typeof vc.mobileColumns === "number") setMobileColumns(vc.mobileColumns);
+            if (typeof vc.showRewards === "boolean") setShowRewards(vc.showRewards);
+            if (typeof vc.showTime === "boolean") setShowTime(vc.showTime);
+            if (Array.isArray(vc.collapsedGoals)) setCollapsedGoals(vc.collapsedGoals);
+            if (typeof vc.hideFinishedAssign === "boolean") setHideFinishedAssign(vc.hideFinishedAssign);
+            if (typeof vc.isAssignMode === "boolean") setIsAssignMode(vc.isAssignMode);
+            if (vc.activeFilter) setActiveFilter(vc.activeFilter);
+            if (vc.activeCategory) setActiveCategory(vc.activeCategory);
+            if (typeof vc.enableTimeSetting === "boolean") setEnableTimeSetting(vc.enableTimeSetting);
+          }
         } else if (error && error.code === "PGRST116") {
-          await supabase.from("user_data").insert({
+          const insertBase: any = {
             id: user.id,
             sp_coins: spCoins,
             spin_tokens: spinTokens,
@@ -305,7 +349,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             time_allowances: timeAllowances,
             history,
             finance_data: financeData,
+          };
+          const vcData: QuestViewConfig = {
+            columns,
+            mobileColumns,
+            showRewards,
+            showTime,
+            collapsedGoals,
+            hideFinishedAssign,
+            isAssignMode,
+            activeFilter,
+            activeCategory,
+            enableTimeSetting,
+          };
+          const { error: insertErr } = await supabase.from("user_data").insert({
+            ...insertBase,
+            view_config: vcData,
           });
+          if (insertErr && (insertErr.message?.includes("view_config") || insertErr.code === "PGRST204" || insertErr.code === "42703")) {
+            await supabase.from("user_data").insert(insertBase);
+          }
         }
       } finally {
         cloudSyncReadyRef.current = true;
@@ -339,13 +402,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       else localStorage.removeItem("sp_banner");
       if (clearViewImage) localStorage.setItem("sp_clear_view_image", clearViewImage);
       else localStorage.removeItem("sp_clear_view_image");
+      const currentViewConfig: QuestViewConfig = {
+        columns,
+        mobileColumns,
+        showRewards,
+        showTime,
+        collapsedGoals,
+        hideFinishedAssign,
+        isAssignMode,
+        activeFilter,
+        activeCategory,
+        enableTimeSetting,
+      };
+      localStorage.setItem("sp_quest_view_config", JSON.stringify(currentViewConfig));
     } catch (err) {
       console.error("Local storage save error:", err);
     }
 
     if (!user || !cloudSyncReadyRef.current) return;
     const timeoutId = setTimeout(async () => {
-      await supabase.from("user_data").upsert({
+      const basePayload: any = {
         id: user.id,
         sp_coins: spCoins,
         spin_tokens: spinTokens,
@@ -355,7 +431,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         time_allowances: timeAllowances,
         history,
         finance_data: financeData,
+      };
+      const viewConfigPayload: QuestViewConfig = {
+        columns,
+        mobileColumns,
+        showRewards,
+        showTime,
+        collapsedGoals,
+        hideFinishedAssign,
+        isAssignMode,
+        activeFilter,
+        activeCategory,
+        enableTimeSetting,
+      };
+
+      const { error: upsertErr } = await supabase.from("user_data").upsert({
+        ...basePayload,
+        view_config: viewConfigPayload,
       });
+
+      if (upsertErr) {
+        if (upsertErr.message?.includes("view_config") || upsertErr.code === "PGRST204" || upsertErr.code === "42703") {
+          console.warn("Supabase user_data table does not have 'view_config' column yet. Upserting without view_config.");
+          await supabase.from("user_data").upsert(basePayload);
+        } else {
+          console.error("Supabase upsert error:", upsertErr);
+        }
+      }
     }, 2000);
     return () => clearTimeout(timeoutId);
   }, [
@@ -377,6 +479,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     soundEnabled,
     stickyNotes,
     dailyBountyClaimedDate,
+    columns,
+    mobileColumns,
+    showRewards,
+    showTime,
+    collapsedGoals,
+    hideFinishedAssign,
+    isAssignMode,
+    activeFilter,
+    activeCategory,
+    enableTimeSetting,
     mounted,
     user,
   ]);
@@ -570,6 +682,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setDailyBountyClaimedDate,
         activeAllowanceTimer,
         setActiveAllowanceTimer,
+        columns,
+        setColumns,
+        mobileColumns,
+        setMobileColumns,
+        showRewards,
+        setShowRewards,
+        showTime,
+        setShowTime,
+        collapsedGoals,
+        setCollapsedGoals,
+        hideFinishedAssign,
+        setHideFinishedAssign,
+        isAssignMode,
+        setIsAssignMode,
+        activeFilter,
+        setActiveFilter,
+        activeCategory,
+        setActiveCategory,
+        enableTimeSetting,
+        setEnableTimeSetting,
         awardSpAndXp,
         recordDailyActivity,
         duplicateGoal,

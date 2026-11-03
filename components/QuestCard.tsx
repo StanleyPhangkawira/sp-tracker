@@ -215,7 +215,7 @@ const QuestCard = React.forwardRef<HTMLDivElement, QuestCardProps>(function Ques
       onDragBegin={onDragBegin}
       onDragMove={onDragMove}
       onDragFinish={onDragFinish}
-      className={`w-full rounded-2xl border p-4 md:p-5 relative select-none transition-shadow [-webkit-touch-callout:none] ${
+      className={`group w-full rounded-2xl border p-4 md:p-5 relative select-none transition-shadow [-webkit-touch-callout:none] ${
         theme.bg
       } ${goal.isFailed ? "border-red-400 ring-2 ring-red-400" : `${theme.border} ${prio.ring}`} ${
         goal.isClaimed ? "opacity-75 cursor-default" : "md:cursor-grab md:active:cursor-grabbing"
@@ -254,65 +254,96 @@ const QuestCard = React.forwardRef<HTMLDivElement, QuestCardProps>(function Ques
 
         <div className="flex items-center gap-1 shrink-0">
           {showRewards && goal.reward > 0 && !goal.isClaimed && (
-            <span className="text-[10px] bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-200/70 dark:border-amber-800 font-rpg-num">
+            <span className="text-[10px] bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-200/70 dark:border-amber-800 font-rpg-num shrink-0">
               <Coins size={11} /> {goal.reward}
             </span>
           )}
-          {!goal.isClaimed && (
-            <button
-              onClick={() => onStartFocus(goal.title || "Quest Focus", goal.estimatedMinutes || 25)}
-              className="p-1 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-white/60 dark:hover:bg-slate-800 rounded-lg cursor-pointer transition-colors"
-              title="Start Focus Timer for this Quest"
-            >
-              <Timer size={15} />
-            </button>
-          )}
-          <button
-            onClick={() => onDuplicateGoal(goal.id, true)}
-            className="p-1 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-white/60 dark:hover:bg-slate-800 rounded-lg cursor-pointer transition-colors"
-            title="Duplicate Quest"
+
+          {/* Quest Setting Icons: smooth slide reveal from right to left */}
+          <div
+            className={`flex items-center gap-1 overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300 ease-out ${
+              openSettings === goal.id || openNotesId === goal.id
+                ? "max-w-[120px] opacity-100 pointer-events-auto"
+                : "max-w-0 opacity-0 pointer-events-none group-hover:max-w-[120px] group-hover:opacity-100 group-hover:pointer-events-auto"
+            }`}
           >
-            <Copy size={14} />
-          </button>
-          {!goal.isClaimed && (
+            {!goal.isClaimed && (
+              <button
+                onClick={() => onStartFocus(goal.title || "Quest Focus", goal.estimatedMinutes || 25)}
+                className={`p-1 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-white/60 dark:hover:bg-slate-800 rounded-lg cursor-pointer transition-all duration-300 ease-out shrink-0 ${
+                  openSettings === goal.id || openNotesId === goal.id
+                    ? "opacity-100 translate-x-0"
+                    : "opacity-0 translate-x-5 group-hover:opacity-100 group-hover:translate-x-0"
+                }`}
+                title="Start Focus Timer for this Quest"
+              >
+                <Timer size={15} />
+              </button>
+            )}
             <button
-              onClick={() => setOpenNotesId(openNotesId === goal.id ? null : goal.id)}
-              className={`p-1 rounded-lg cursor-pointer transition-colors ${
-                goal.notes || openNotesId === goal.id
-                  ? "text-indigo-600 dark:text-indigo-400 bg-white/70 dark:bg-slate-800"
-                  : "text-gray-400 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-800"
+              onClick={() => onDuplicateGoal(goal.id, true)}
+              className={`p-1 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-white/60 dark:hover:bg-slate-800 rounded-lg cursor-pointer transition-all duration-300 ease-out shrink-0 ${
+                openSettings === goal.id || openNotesId === goal.id
+                  ? "opacity-100 translate-x-0"
+                  : "opacity-0 translate-x-4 group-hover:opacity-100 group-hover:translate-x-0"
               }`}
-              title="Quest Notes"
+              title="Duplicate Quest"
             >
-              <FileText size={15} />
+              <Copy size={14} />
             </button>
-          )}
-          {goal.isClaimed && (
-            <button
-              onClick={() => onDeleteGoal(goal.id)}
-              className="p-1 text-gray-300 dark:text-slate-600 hover:text-red-500 transition-colors cursor-pointer"
-              title="Delete Goal"
-            >
-              <Trash2 size={16} />
-            </button>
-          )}
-          {!goal.isClaimed && (
-            <button
-              onClick={() => setOpenSettings(openSettings === goal.id ? null : goal.id)}
-              className={`p-1 rounded-lg cursor-pointer transition-colors ${
-                openSettings === goal.id
-                  ? "text-indigo-600 dark:text-indigo-400 bg-white/70 dark:bg-slate-800"
-                  : "text-gray-400 hover:bg-white/60 dark:hover:bg-slate-800"
-              }`}
-              title="Quest Settings"
-            >
-              <Settings2 size={16} />
-            </button>
-          )}
+            {!goal.isClaimed && (
+              <button
+                onClick={() => setOpenNotesId(openNotesId === goal.id ? null : goal.id)}
+                className={`p-1 rounded-lg cursor-pointer transition-all duration-300 ease-out shrink-0 ${
+                  goal.notes || openNotesId === goal.id
+                    ? "text-indigo-600 dark:text-indigo-400 bg-white/70 dark:bg-slate-800"
+                    : "text-gray-400 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-800"
+                } ${
+                  openSettings === goal.id || openNotesId === goal.id
+                    ? "opacity-100 translate-x-0"
+                    : "opacity-0 translate-x-3 group-hover:opacity-100 group-hover:translate-x-0"
+                }`}
+                title="Quest Notes"
+              >
+                <FileText size={15} />
+              </button>
+            )}
+            {goal.isClaimed && (
+              <button
+                onClick={() => onDeleteGoal(goal.id)}
+                className={`p-1 text-gray-300 dark:text-slate-600 hover:text-red-500 transition-all duration-300 ease-out cursor-pointer shrink-0 ${
+                  openSettings === goal.id || openNotesId === goal.id
+                    ? "opacity-100 translate-x-0"
+                    : "opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0"
+                }`}
+                title="Delete Goal"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+            {!goal.isClaimed && (
+              <button
+                onClick={() => setOpenSettings(openSettings === goal.id ? null : goal.id)}
+                className={`p-1 rounded-lg cursor-pointer transition-all duration-300 ease-out shrink-0 ${
+                  openSettings === goal.id
+                    ? "text-indigo-600 dark:text-indigo-400 bg-white/70 dark:bg-slate-800"
+                    : "text-gray-400 hover:bg-white/60 dark:hover:bg-slate-800"
+                } ${
+                  openSettings === goal.id || openNotesId === goal.id
+                    ? "opacity-100 translate-x-0"
+                    : "opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0"
+                }`}
+                title="Quest Settings"
+              >
+                <Settings2 size={16} />
+              </button>
+            )}
+          </div>
+
           {!goal.isClaimed && (
             <div
               data-card-handle
-              className="touch-none p-1 -mr-1 text-gray-300 dark:text-slate-600 hover:text-gray-500 dark:hover:text-slate-400 cursor-grab active:cursor-grabbing"
+              className="touch-none p-1 -mr-1 text-gray-300 dark:text-slate-600 hover:text-gray-500 dark:hover:text-slate-400 cursor-grab active:cursor-grabbing shrink-0"
               title="Drag to move"
             >
               <GripHorizontal size={16} />
@@ -1399,7 +1430,10 @@ const QuestCard = React.forwardRef<HTMLDivElement, QuestCardProps>(function Ques
         </AnimatePresence>
       )}
 
-      {goal.type !== "list" && !goal.isClaimed && !goal.isFailed && (
+      {goal.type !== "list" &&
+        !goal.isClaimed &&
+        !goal.isFailed &&
+        (goal.children.length === 0 || !collapsedGoals.includes(goal.id)) && (
         <button
           onClick={() => onAddChildTask(goal.id)}
           className="mt-3 flex items-center gap-1 text-xs font-bold text-gray-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"

@@ -55,28 +55,41 @@ export function TargetsPage() {
     setClearViewShowSidebar,
     dailyBountyClaimedDate,
     setDailyBountyClaimedDate,
+    columns,
+    setColumns,
+    mobileColumns,
+    setMobileColumns,
+    isAssignMode,
+    setIsAssignMode,
+    showRewards,
+    setShowRewards,
+    showTime,
+    setShowTime,
+    hideFinishedAssign,
+    setHideFinishedAssign,
+    enableTimeSetting,
+    setEnableTimeSetting,
+    collapsedGoals,
+    setCollapsedGoals,
+    activeFilter,
+    setActiveFilter,
+    activeCategory,
+    setActiveCategory,
   } = useAppContext();
 
   const [openSettings, setOpenSettings] = useState<string | null>(null);
   const [openNotesId, setOpenNotesId] = useState<string | null>(null);
-  const [columns, setColumns] = useState(2);
-  const [mobileColumns, setMobileColumns] = useState(1);
-  const [isAssignMode, setIsAssignMode] = useState(false);
-  const [showRewards, setShowRewards] = useState(true);
-  const [showTime, setShowTime] = useState(true);
-  const [hideFinishedAssign, setHideFinishedAssign] = useState(false);
+
   const [mobileAssignIndex, setMobileAssignIndex] = useState(0);
 
   const edgeDir = useRef(0);
   const edgeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [enableTimeSetting, setEnableTimeSetting] = useState(false);
   const [editingTimeId, setEditingTimeId] = useState<string | null>(null);
 
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const [recentlyCompleted, setRecentlyCompleted] = useState<string[]>([]);
-  const [collapsedGoals, setCollapsedGoals] = useState<string[]>([]);
   const [expandedChildId, setExpandedChildId] = useState<string | null>(null);
   const [copiedListId, setCopiedListId] = useState<string | null>(null);
   const [rewardPopups, setRewardPopups] = useState<FloatingRewardPopup[]>([]);
@@ -150,8 +163,6 @@ export function TargetsPage() {
   }, [isAssignMode, cleanMode]);
 
   // Filters & Search
-  const [activeFilter, setActiveFilter] = useState<"All" | "weekly" | "daily" | "list">("All");
-  const [activeCategory, setActiveCategory] = useState<string>("All Areas");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showDuplicateMenu, setShowDuplicateMenu] = useState(false);
 

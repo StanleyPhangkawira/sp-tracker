@@ -154,6 +154,32 @@ export interface ActiveAllowanceTimer {
 
 export type RpgSoundType = "check" | "claim" | "quest" | "levelup" | "click" | "spin";
 
+export interface QuestViewConfig {
+  columns: number;
+  mobileColumns: number;
+  showRewards: boolean;
+  showTime: boolean;
+  collapsedGoals: string[];
+  hideFinishedAssign: boolean;
+  isAssignMode: boolean;
+  activeFilter: "All" | "weekly" | "daily" | "list";
+  activeCategory: string;
+  enableTimeSetting: boolean;
+}
+
+export const DEFAULT_QUEST_VIEW_CONFIG: QuestViewConfig = {
+  columns: 2,
+  mobileColumns: 1,
+  showRewards: true,
+  showTime: true,
+  collapsedGoals: [],
+  hideFinishedAssign: false,
+  isAssignMode: false,
+  activeFilter: "All",
+  activeCategory: "All Areas",
+  enableTimeSetting: false,
+};
+
 export interface AppContextType {
   spCoins: number;
   setSpCoins: React.Dispatch<React.SetStateAction<number>>;
@@ -195,6 +221,26 @@ export interface AppContextType {
   setDailyBountyClaimedDate: React.Dispatch<React.SetStateAction<string>>;
   activeAllowanceTimer: ActiveAllowanceTimer | null;
   setActiveAllowanceTimer: React.Dispatch<React.SetStateAction<ActiveAllowanceTimer | null>>;
+  columns: number;
+  setColumns: React.Dispatch<React.SetStateAction<number>>;
+  mobileColumns: number;
+  setMobileColumns: React.Dispatch<React.SetStateAction<number>>;
+  showRewards: boolean;
+  setShowRewards: React.Dispatch<React.SetStateAction<boolean>>;
+  showTime: boolean;
+  setShowTime: React.Dispatch<React.SetStateAction<boolean>>;
+  collapsedGoals: string[];
+  setCollapsedGoals: React.Dispatch<React.SetStateAction<string[]>>;
+  hideFinishedAssign: boolean;
+  setHideFinishedAssign: React.Dispatch<React.SetStateAction<boolean>>;
+  isAssignMode: boolean;
+  setIsAssignMode: React.Dispatch<React.SetStateAction<boolean>>;
+  activeFilter: "All" | "weekly" | "daily" | "list";
+  setActiveFilter: React.Dispatch<React.SetStateAction<"All" | "weekly" | "daily" | "list">>;
+  activeCategory: string;
+  setActiveCategory: React.Dispatch<React.SetStateAction<string>>;
+  enableTimeSetting: boolean;
+  setEnableTimeSetting: React.Dispatch<React.SetStateAction<boolean>>;
   awardSpAndXp: (baseSp: number, applyStreakBonus?: boolean) => number;
   recordDailyActivity: () => void;
   duplicateGoal: (goalId: string, resetProgress?: boolean) => Goal | null;
